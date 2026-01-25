@@ -1,16 +1,17 @@
 // ============================================================================
-// PHOTO CARD COMPONENT
+// PHOTO CARD COMPONENT (Clean - No Filename)
 // File: src/components/gallery/PhotoCard.tsx
-// Deskripsi: Individual photo card untuk gallery
+// - Tanpa nama file di card
+// - Hanya tanggal upload dan uploader (jika admin)
 // ============================================================================
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
-import { Check, Trash2, Download, Info } from 'lucide-react'
+import { Check, Trash2, Download } from 'lucide-react'
 import type { Photo } from '@/lib/supabase/client'
-import { formatRelativeTime, formatFileSize } from '@/lib/utils'
+import { formatRelativeTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
 interface PhotoCardProps {
@@ -18,6 +19,9 @@ interface PhotoCardProps {
   isSelecting: boolean
   isSelected: boolean
   onSelect: (photoId: string) => void
+  onLongPress: (photoId: string) => void
+  onPreview?: (photo: Photo) => void
+  onDownload?: (photo: Photo) => void
   onDelete?: (photoId: string) => void
   showUserInfo?: boolean
 }
@@ -27,175 +31,182 @@ export default function PhotoCard({
   isSelecting,
   isSelected,
   onSelect,
+  onLongPress,
+  onPreview,
+  onDownload,
   onDelete,
   showUserInfo = false,
 }: PhotoCardProps) {
   const [isLoading, setIsLoading] = useState(true)
-  const [showInfo, setShowInfo] = useState(false)
+  const [dimensions, setDimensions] = useState({ width: 1, height: 1 })
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null)
+  const isLongPress = useRef(false)
 
-  const handleClick = () => {
+  const handleTouchStart = () => {
+    isLongPress.current = false
+    longPressTimer.current = setTimeout(() => {
+      isLongPress.current = true
+      onLongPress(photo.id)
+      if (navigator.vibrate) navigator.vibrate(50)
+    }, 500)
+  }
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+  }
+
+  const handleClick = (e: React.MouseEvent | React.TouchEvent) => {
+    if (isLongPress.current) {
+      e.preventDefault()
+      return
+    }
     if (isSelecting) {
+      e.preventDefault()
       onSelect(photo.id)
-    } else {
-      // Open lightbox/detail view (akan diimplementasi nanti)
-      setShowInfo(!showInfo)
+    } else if (onPreview) {
+      onPreview(photo)
     }
   }
 
-  const handleDownload = async (e: React.MouseEvent) => {
+  const handleCheckboxClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    
-    try {
-      const response = await fetch(photo.display_url)
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = photo.file_name
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-    } catch (error) {
-      console.error('Download failed:', error)
-    }
+    onSelect(photo.id)
+  }
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onDownload?.(photo)
   }
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (onDelete) {
-      onDelete(photo.id)
-    }
+    onDelete?.(photo.id)
   }
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget
+    setDimensions({ width: img.naturalWidth, height: img.naturalHeight })
+    setIsLoading(false)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) clearTimeout(longPressTimer.current)
+    }
+  }, [])
 
   return (
     <div
       onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+      onMouseDown={handleTouchStart}
+      onMouseUp={handleTouchEnd}
+      onMouseLeave={handleTouchEnd}
       className={cn(
-        'group relative bg-white dark:bg-gray-800 rounded-lg overflow-hidden cursor-pointer transition-all duration-200',
-        isSelected && 'ring-4 ring-blue-500',
-        'hover:shadow-xl'
+        'group relative rounded-lg overflow-hidden cursor-pointer',
+        'transition-all duration-200',
+        'hover:shadow-lg active:scale-[0.98]',
+        isSelected && 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900 scale-[0.97]',
+        'break-inside-avoid mb-1.5 md:mb-2'
       )}
     >
-      {/* Image Container */}
-      <div className="relative aspect-square">
+      <div 
+        className="relative w-full bg-gray-100 dark:bg-gray-800"
+        style={{ 
+          aspectRatio: `${dimensions.width} / ${dimensions.height}`,
+          minHeight: isLoading ? '100px' : 'auto'
+        }}
+      >
         <Image
           src={photo.display_url}
-          alt={photo.file_name}
+          alt={photo.file_name || 'Photo'}
           fill
-          sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
           className={cn(
             'object-cover transition-all duration-300',
-            isLoading && 'blur-sm scale-110',
-            'group-hover:scale-105'
+            isLoading && 'blur-sm scale-105'
           )}
-          onLoadingComplete={() => setIsLoading(false)}
+          onLoad={handleImageLoad}
+          priority={false}
         />
 
-        {/* Loading Skeleton */}
         {isLoading && (
           <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse" />
         )}
 
-        {/* Overlay on Hover */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-
-        {/* Selection Checkbox */}
-        {isSelecting && (
-          <div className="absolute top-3 left-3">
-            <div
-              className={cn(
-                'w-6 h-6 rounded-full border-2 flex items-center justify-center transition',
-                isSelected
-                  ? 'bg-blue-600 border-blue-600'
-                  : 'bg-white/80 border-white backdrop-blur-sm'
-              )}
-            >
-              {isSelected && <Check className="w-4 h-4 text-white" />}
-            </div>
-          </div>
+        {isSelected && (
+          <div className="absolute inset-0 bg-blue-500/30" />
         )}
 
-        {/* Action Buttons */}
+        {/* Gradient - visible on mobile, hover on desktop */}
+        <div className={cn(
+          'absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30',
+          'opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity'
+        )} />
+
+        {/* Checkbox */}
+        <div 
+          className={cn(
+            'absolute top-1.5 left-1.5 z-10 transition-all',
+            isSelecting || isSelected 
+              ? 'opacity-100 scale-100' 
+              : 'opacity-0 scale-75 md:group-hover:opacity-100 md:group-hover:scale-100'
+          )}
+          onClick={handleCheckboxClick}
+        >
+          <div
+            className={cn(
+              'w-5 h-5 md:w-6 md:h-6 rounded-full border-2 flex items-center justify-center shadow',
+              isSelected
+                ? 'bg-blue-600 border-blue-600'
+                : 'bg-white/90 border-white'
+            )}
+          >
+            {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+          </div>
+        </div>
+
+        {/* Action Buttons - Top Right */}
         {!isSelecting && (
-          <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={handleDownload}
-              className="p-2 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-full hover:bg-white dark:hover:bg-gray-700 transition"
-              title="Download"
-            >
-              <Download className="w-4 h-4 text-gray-700 dark:text-gray-200" />
-            </button>
+          <div className={cn(
+            'absolute top-1.5 right-1.5 z-10 flex gap-1',
+            'opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity'
+          )}>
+            {onDownload && (
+              <button
+                onClick={handleDownload}
+                className="p-1 bg-white/90 dark:bg-gray-800/90 rounded-full shadow active:scale-90 transition"
+              >
+                <Download className="w-3 h-3 text-gray-700 dark:text-gray-200" />
+              </button>
+            )}
 
             {onDelete && (
               <button
                 onClick={handleDelete}
-                className="p-2 bg-red-500/90 backdrop-blur-sm rounded-full hover:bg-red-600 transition"
-                title="Hapus"
+                className="p-1 bg-red-500/90 rounded-full shadow active:scale-90 transition"
               >
-                <Trash2 className="w-4 h-4 text-white" />
+                <Trash2 className="w-3 h-3 text-white" />
               </button>
             )}
           </div>
         )}
 
-        {/* Bottom Info */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-          <p className="text-xs font-medium truncate">
-            {photo.file_name}
-          </p>
-          <p className="text-xs opacity-80">
+        {/* Bottom Info - Hanya tanggal dan uploader, tanpa nama file */}
+        <div className={cn(
+          'absolute bottom-0 left-0 right-0 p-1.5 z-10',
+          'opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity'
+        )}>
+          <p className="text-[10px] text-white/90 drop-shadow-md">
             {formatRelativeTime(photo.created_at)}
+            {showUserInfo && photo.profile && (
+              <span className="ml-1">• {photo.profile.full_name}</span>
+            )}
           </p>
         </div>
       </div>
-
-      {/* Info Panel (expandable) */}
-      {showInfo && (
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              Ukuran File
-            </span>
-            <span className="text-xs text-gray-900 dark:text-white">
-              {formatFileSize(photo.file_size)}
-            </span>
-          </div>
-
-          {showUserInfo && photo.profile && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                Diupload oleh
-              </span>
-              <span className="text-xs text-gray-900 dark:text-white">
-                {photo.profile.full_name}
-              </span>
-            </div>
-          )}
-
-          {photo.exif_data?.camera_model && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                Kamera
-              </span>
-              <span className="text-xs text-gray-900 dark:text-white">
-                {photo.exif_data.camera_model}
-              </span>
-            </div>
-          )}
-
-          {photo.exif_data?.date_taken && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                Tanggal Diambil
-              </span>
-              <span className="text-xs text-gray-900 dark:text-white">
-                {photo.exif_data.date_taken}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   )
 }

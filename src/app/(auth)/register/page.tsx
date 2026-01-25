@@ -1,163 +1,107 @@
 // ============================================================================
-// REGISTER PAGE - Complete Registration Flow
+// REGISTER PAGE - Interactive Real-time Validation
 // File: src/app/(auth)/register/page.tsx
-// Deskripsi: Halaman registrasi dengan OTP verification
+// Deskripsi: Halaman registrasi dengan validasi password real-time & UX interaktif
 // ============================================================================
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { sendOTP, register } from '@/actions/auth'
-import { UserPlus, Loader2, Eye, EyeOff, Send, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
-
-type Step = 'form' | 'otp'
+import { sendOTP } from '@/actions/auth'
+import { 
+  UserPlus, 
+  Loader2, 
+  Eye, 
+  EyeOff, 
+  Send, 
+  CheckCircle2, 
+  User, 
+  Phone, 
+  Lock, 
+  XCircle, 
+  ArrowRight
+} from 'lucide-react'
 
 export default function RegisterPage() {
   const router = useRouter()
   
-  // Form state
-  const [step, setStep] = useState<Step>('form')
-  const [fullName, setFullName] = useState('')
-  const [phoneNumber, setPhoneNumber] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [otpCode, setOtpCode] = useState('')
-  
-  // UI state
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  // ================= STATE MANAGEMENT =================
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [countdown, setCountdown] = useState(0)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
-  // ============================================================================
-  // STEP 1: Send OTP
-  // ============================================================================
-  
-  const handleSendOTP = async (e: React.FormEvent) => {
+  // Form Data
+  const [formData, setFormData] = useState({
+    fullName: '',
+    phoneNumber: '',
+    password: '',
+    confirmPassword: ''
+  })
+
+  // Validasi Visual (null = belum isi, true = valid, false = invalid)
+  const [passMatch, setPassMatch] = useState<boolean | null>(null)
+  const [error, setError] = useState('')
+
+  // ================= REAL-TIME VALIDATION =================
+  useEffect(() => {
+    // Cek kesamaan password secara real-time
+    if (formData.confirmPassword) {
+      setPassMatch(formData.password === formData.confirmPassword)
+    } else {
+      setPassMatch(null) // Reset jika kosong
+    }
+  }, [formData.password, formData.confirmPassword])
+
+  // ================= HANDLERS =================
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value })
+    // Reset error global saat user mengetik
+    if (error) setError('')
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setSuccess('')
 
-    // Validasi
-    if (fullName.trim().length < 3) {
+    // 1. Validasi Final
+    if (formData.fullName.trim().length < 3) {
       setError('❌ Nama lengkap minimal 3 karakter')
       return
     }
-
-    if (!phoneNumber) {
-      setError('❌ Nomor WhatsApp harus diisi')
-      return
-    }
-
-    if (password.length < 6) {
+    if (formData.password.length < 6) {
       setError('❌ Password minimal 6 karakter')
       return
     }
-
-    if (password !== confirmPassword) {
-      setError('❌ Konfirmasi password tidak cocok')
+    if (formData.password !== formData.confirmPassword) {
+      setError('❌ Password tidak cocok!')
       return
     }
 
     setIsLoading(true)
 
     try {
-      const result = await sendOTP(phoneNumber, 'registration')
+      // 2. Simpan Data Sementara (Untuk Step OTP nanti)
+      sessionStorage.setItem('temp_register_data', JSON.stringify({
+        fullName: formData.fullName,
+        phoneNumber: formData.phoneNumber,
+        password: formData.password
+      }))
+
+      // 3. Kirim OTP
+      const result = await sendOTP(formData.phoneNumber, 'registration')
 
       if (result.success) {
-        setSuccess(result.message)
-        setStep('otp')
-        setCountdown(60)
-        
-        // Countdown timer
-        const timer = setInterval(() => {
-          setCountdown((prev) => {
-            if (prev <= 1) {
-              clearInterval(timer)
-              return 0
-            }
-            return prev - 1
-          })
-        }, 1000)
+        // Redirect ke halaman Verify OTP dengan membawa nomor HP di URL
+        const encodedPhone = encodeURIComponent(formData.phoneNumber)
+        router.push(`/verify-otp?phone=${encodedPhone}&type=registration`)
       } else {
         setError(result.message)
       }
     } catch (err) {
-      setError('❌ Terjadi kesalahan. Silakan coba lagi.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // ============================================================================
-  // STEP 2: Verify OTP & Register
-  // ============================================================================
-  
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setSuccess('')
-
-    if (!/^\d{6}$/.test(otpCode)) {
-      setError('❌ Kode OTP harus 6 digit angka')
-      return
-    }
-
-    setIsLoading(true)
-
-    try {
-      const result = await register(fullName, phoneNumber, password, otpCode)
-
-      if (result.success) {
-        setSuccess(result.message)
-        setTimeout(() => {
-          router.push('/login')
-        }, 2000)
-      } else {
-        setError(result.message)
-      }
-    } catch (err) {
-      setError('❌ Terjadi kesalahan. Silakan coba lagi.')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // ============================================================================
-  // RESEND OTP
-  // ============================================================================
-  
-  const handleResendOTP = async () => {
-    if (countdown > 0) return
-
-    setError('')
-    setIsLoading(true)
-
-    try {
-      const result = await sendOTP(phoneNumber, 'registration')
-
-      if (result.success) {
-        setSuccess(result.message)
-        setCountdown(60)
-        
-        const timer = setInterval(() => {
-          setCountdown((prev) => {
-            if (prev <= 1) {
-              clearInterval(timer)
-              return 0
-            }
-            return prev - 1
-          })
-        }, 1000)
-      } else {
-        setError(result.message)
-      }
-    } catch (err) {
-      setError('❌ Terjadi kesalahan. Silakan coba lagi.')
+      console.error(err)
+      setError('❌ Terjadi kesalahan sistem. Coba lagi nanti.')
     } finally {
       setIsLoading(false)
     }
@@ -166,237 +110,192 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-white/20">
           
-          {/* Header */}
+          {/* ================= HEADER (LOGO & JUDUL) ================= */}
           <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center">
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30">
               <UserPlus className="w-8 h-8 text-white" />
             </div>
           </div>
 
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              {step === 'form' ? 'Daftar Akun Baru' : 'Verifikasi OTP'}
+              Daftar Akun Baru
             </h1>
             <p className="text-gray-600 dark:text-gray-400">
-              {step === 'form' 
-                ? 'Isi data diri Anda untuk mendaftar' 
-                : `Kode OTP dikirim ke ${phoneNumber}`
-              }
+              Isi data diri Anda untuk bergabung
             </p>
           </div>
 
-          {/* STEP 1: Form Registration */}
-          {step === 'form' && (
-            <form onSubmit={handleSendOTP} className="space-y-4">
-              {/* Nama Lengkap */}
-              <div>
-                <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Nama Lengkap
-                </label>
+          {/* ================= FORM REGISTRASI ================= */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            
+            {/* 1. Nama Lengkap */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1.5 ml-1">
+                Nama Lengkap
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-500 transition-colors">
+                  <User className="h-5 w-5" />
+                </div>
                 <input
                   type="text"
-                  id="fullName"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Masukkan nama lengkap"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  name="fullName"
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  placeholder="Contoh: Ahink Ganteng"
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-xl leading-5 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
                   required
                 />
               </div>
+            </div>
 
-              {/* Nomor WhatsApp */}
-              <div>
-                <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Nomor WhatsApp
-                </label>
+            {/* 2. Nomor WhatsApp */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1.5 ml-1">
+                Nomor WhatsApp
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-500 transition-colors">
+                  <Phone className="h-5 w-5" />
+                </div>
                 <input
                   type="tel"
-                  id="phoneNumber"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="08xx atau +62xx"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  name="phoneNumber"
+                  value={formData.phoneNumber}
+                  onChange={handleChange}
+                  placeholder="08xxxxxxxxxx"
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-xl leading-5 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
                   required
                 />
               </div>
+            </div>
 
-              {/* Password */}
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    id="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Minimal 6 karakter"
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+            {/* 3. Password */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1.5 ml-1">
+                Password
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-500 transition-colors">
+                  <Lock className="h-5 w-5" />
                 </div>
-              </div>
-
-              {/* Konfirmasi Password */}
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Konfirmasi Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    id="confirmPassword"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Ulangi password"
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  >
-                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Error/Success Message */}
-              {error && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                  <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-                </div>
-              )}
-
-              {success && (
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                  <p className="text-sm text-green-600 dark:text-green-400">{success}</p>
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-medium py-3 rounded-lg transition flex items-center justify-center gap-2"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Mengirim OTP...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-5 h-5" />
-                    Kirim Kode OTP
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-
-          {/* STEP 2: OTP Verification */}
-          {step === 'otp' && (
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div>
-                <label htmlFor="otpCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Kode OTP (6 Digit)
-                </label>
                 <input
-                  type="text"
-                  id="otpCode"
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="000000"
-                  maxLength={6}
-                  className="w-full px-4 py-3 text-center text-2xl font-bold rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Minimal 6 karakter"
+                  className="block w-full pl-10 pr-10 py-3 border border-gray-300 dark:border-gray-600 rounded-xl leading-5 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* 4. Konfirmasi Password (INTERAKTIF) */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1.5 ml-1">
+                Ulangi Password
+              </label>
+              <div className="relative">
+                {/* Ikon Validasi Kiri (Berubah Warna) */}
+                <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none transition-colors ${
+                  passMatch === false ? 'text-red-500' : 
+                  passMatch === true ? 'text-green-500' : 
+                  'text-gray-400'
+                }`}>
+                  {passMatch === true ? <CheckCircle2 className="h-5 w-5" /> : 
+                   passMatch === false ? <XCircle className="h-5 w-5" /> : 
+                   <Lock className="h-5 w-5" />}
+                </div>
+                
+                <input
+                  type={showConfirm ? 'text' : 'password'}
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="Ketik ulang password"
+                  className={`block w-full pl-10 pr-10 py-3 border rounded-xl leading-5 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 transition-all ${
+                    passMatch === false 
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' 
+                      : passMatch === true 
+                      ? 'border-green-500 focus:border-green-500 focus:ring-green-500/20'
+                      : 'border-gray-300 dark:border-gray-600 focus:border-blue-500 focus:ring-blue-500/50'
+                  }`}
                   required
                 />
+                
+                <button
+                  type="button"
+                  onClick={() => setShowConfirm(!showConfirm)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                >
+                  {showConfirm ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
+              
+              {/* Feedback Text di Bawah Input */}
+              {passMatch === false && (
+                <p className="text-xs text-red-500 mt-1 ml-1 font-medium animate-pulse flex items-center gap-1">
+                  <XCircle className="w-3 h-3" /> Password tidak cocok!
+                </p>
+              )}
+              {passMatch === true && (
+                <p className="text-xs text-green-600 mt-1 ml-1 font-medium flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Password cocok.
+                </p>
+              )}
+            </div>
 
-              {/* Countdown / Resend */}
-              <div className="text-center">
-                {countdown > 0 ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Kirim ulang dalam <span className="font-bold text-gray-900 dark:text-white">{countdown}s</span>
-                  </p>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleResendOTP}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
-                  >
-                    Kirim Ulang Kode OTP
-                  </button>
-                )}
+            {/* Error Message Global */}
+            {error && (
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl animate-in fade-in slide-in-from-top-2">
+                <p className="text-sm text-red-600 dark:text-red-400 text-center font-medium">
+                  {error}
+                </p>
               </div>
+            )}
 
-              {/* Error/Success Message */}
-              {error && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                  <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-                </div>
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isLoading || passMatch === false}
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/30 transform transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:transform-none mt-4"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Memproses...</span>
+                </>
+              ) : (
+                <>
+                  <span>Kirim Kode OTP</span>
+                  <ArrowRight className="w-5 h-5" />
+                </>
               )}
+            </button>
+          </form>
 
-              {success && (
-                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                  <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" />
-                    {success}
-                  </p>
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading || otpCode.length !== 6}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-medium py-3 rounded-lg transition flex items-center justify-center gap-2"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Memverifikasi...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-5 h-5" />
-                    Verifikasi & Daftar
-                  </>
-                )}
-              </button>
-
-              {/* Back Button */}
-              <button
-                type="button"
-                onClick={() => setStep('form')}
-                className="w-full text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-medium py-2 transition"
-              >
-                ← Kembali ke Form
-              </button>
-            </form>
-          )}
-
-          {/* Login Link */}
-          <div className="mt-6 text-center">
+          {/* ================= FOOTER ================= */}
+          <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700 text-center">
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Sudah punya akun?{' '}
-              <Link href="/login" className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium">
-                Login di sini
+              <Link href="/login" className="font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
+                Login disini
               </Link>
             </p>
           </div>
+
         </div>
       </div>
     </div>

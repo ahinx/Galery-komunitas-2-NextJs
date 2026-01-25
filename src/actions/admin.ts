@@ -1,19 +1,33 @@
 // ============================================================================
-// ADMIN SERVER ACTIONS
+// ADMIN SERVER ACTIONS (FIXED & COMPLETE)
 // File: src/actions/admin.ts
-// Deskripsi: Server actions untuk admin management
+// Deskripsi: Server actions untuk admin management dengan Service Role Bypass
 // ============================================================================
 
 'use server'
 
-import { createServerSupabaseClient } from '@/lib/supabase/client'
+import { createClient } from '@supabase/supabase-js'
 import { getCurrentUser } from './auth'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '@/lib/constants'
 import type { Profile } from '@/lib/supabase/client'
+import { revalidatePath } from 'next/cache'
 
-// ============================================================================
-// TYPE DEFINITIONS
-// ============================================================================
+// --- HELPER: ADMIN CLIENT (BYPASS RLS) ---
+function getAdminClient() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+    if (!serviceRoleKey) {
+        throw new Error('FATAL: SUPABASE_SERVICE_ROLE_KEY missing')
+    }
+
+    return createClient(supabaseUrl, serviceRoleKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    })
+}
 
 type ActionResult<T = void> = {
     success: boolean
@@ -21,314 +35,180 @@ type ActionResult<T = void> = {
     data?: T
 }
 
-// ============================================================================
-// ACTION: GET ALL USERS
-// ============================================================================
-
+// ----------------------------------------------------------------------------
+// 1. GET ALL USERS (Untuk Halaman Kelola Users)
+// ----------------------------------------------------------------------------
 export async function getAllUsers(): Promise<ActionResult<{ users: Profile[] }>> {
     try {
         const user = await getCurrentUser()
-
         if (!user || !['admin', 'super_admin'].includes(user.role)) {
-            return {
-                success: false,
-                message: ERROR_MESSAGES.UNAUTHORIZED,
-            }
+            return { success: false, message: ERROR_MESSAGES.UNAUTHORIZED }
         }
 
-        const supabase = await createServerSupabaseClient()
+        const supabase = getAdminClient()
 
         const { data: users, error } = await supabase
             .from('profiles')
             .select('*')
             .order('created_at', { ascending: false })
 
-        if (error) {
-            console.error('Error fetching users:', error)
-            return {
-                success: false,
-                message: ERROR_MESSAGES.SERVER_ERROR,
-            }
-        }
+        if (error) throw error
 
         return {
             success: true,
-            message: 'Users fetched successfully',
-            data: {
-                users: users as Profile[],
-            },
+            message: 'Data user berhasil diambil',
+            data: { users: users as Profile[] },
         }
     } catch (error) {
-        console.error('Error in getAllUsers:', error)
-        return {
-            success: false,
-            message: ERROR_MESSAGES.SERVER_ERROR,
-        }
+        console.error('Error getAllUsers:', error)
+        return { success: false, message: ERROR_MESSAGES.SERVER_ERROR }
     }
 }
 
-// ============================================================================
-// ACTION: GET PENDING APPROVALS
-// ============================================================================
-
+// ----------------------------------------------------------------------------
+// 2. GET PENDING (FIXED BUG: Filter by status='pending')
+// ----------------------------------------------------------------------------
 export async function getPendingApprovals(): Promise<ActionResult<{ users: Profile[] }>> {
     try {
         const user = await getCurrentUser()
-
         if (!user || !['admin', 'super_admin'].includes(user.role)) {
-            return {
-                success: false,
-                message: ERROR_MESSAGES.UNAUTHORIZED,
-            }
+            return { success: false, message: ERROR_MESSAGES.UNAUTHORIZED }
         }
 
-        const supabase = await createServerSupabaseClient()
+        const supabase = getAdminClient()
 
+        // PERBAIKAN DISINI: Gunakan .eq('status', 'pending')
         const { data: users, error } = await supabase
             .from('profiles')
             .select('*')
             .eq('is_verified', true)
-            .eq('is_approved', false)
+            .eq('status', 'pending') // <--- KUNCI PERBAIKAN
             .order('created_at', { ascending: false })
 
-        if (error) {
-            console.error('Error fetching pending approvals:', error)
-            return {
-                success: false,
-                message: ERROR_MESSAGES.SERVER_ERROR,
-            }
-        }
+        if (error) throw error
 
         return {
             success: true,
-            message: 'Pending approvals fetched successfully',
-            data: {
-                users: users as Profile[],
-            },
+            message: 'Pending approvals fetched',
+            data: { users: users as Profile[] },
         }
     } catch (error) {
-        console.error('Error in getPendingApprovals:', error)
-        return {
-            success: false,
-            message: ERROR_MESSAGES.SERVER_ERROR,
-        }
+        return { success: false, message: ERROR_MESSAGES.SERVER_ERROR }
     }
 }
 
-// ============================================================================
-// ACTION: APPROVE USER
-// ============================================================================
-
+// ----------------------------------------------------------------------------
+// 3. ACTIONS: APPROVE & BAN
+// ----------------------------------------------------------------------------
 export async function approveUser(userId: string): Promise<ActionResult> {
     try {
         const user = await getCurrentUser()
-
         if (!user || !['admin', 'super_admin'].includes(user.role)) {
-            return {
-                success: false,
-                message: ERROR_MESSAGES.UNAUTHORIZED,
-            }
+            return { success: false, message: 'Unauthorized' }
         }
 
-        const supabase = await createServerSupabaseClient()
+        const supabase = getAdminClient()
+        await supabase.from('profiles').update({
+            is_approved: true,
+            status: 'approved'
+        }).eq('id', userId)
 
-        const { error } = await supabase
-            .from('profiles')
-            .update({
-                is_approved: true,
-            })
-            .eq('id', userId)
-
-        if (error) {
-            console.error('Error approving user:', error)
-            return {
-                success: false,
-                message: ERROR_MESSAGES.SERVER_ERROR,
-            }
-        }
-
-        // TODO: Kirim notifikasi WhatsApp ke user bahwa akun sudah diapprove
-        // const { data: profile } = await supabase
-        //   .from('profiles')
-        //   .select('phone_number, full_name')
-        //   .eq('id', userId)
-        //   .single()
-        //
-        // if (profile) {
-        //   await sendWhatsAppNotification(profile.phone_number, 
-        //     `Selamat ${profile.full_name}! Akun Anda telah disetujui. Silakan login kembali.`)
-        // }
-
-        return {
-            success: true,
-            message: SUCCESS_MESSAGES.APPROVAL_SUCCESS,
-        }
-    } catch (error) {
-        console.error('Error in approveUser:', error)
-        return {
-            success: false,
-            message: ERROR_MESSAGES.SERVER_ERROR,
-        }
-    }
+        revalidatePath('/admin')
+        revalidatePath('/admin/users')
+        return { success: true, message: 'User berhasil disetujui' }
+    } catch { return { success: false, message: 'Gagal memproses' } }
 }
-
-// ============================================================================
-// ACTION: REJECT/BAN USER
-// ============================================================================
 
 export async function banUser(userId: string): Promise<ActionResult> {
     try {
         const user = await getCurrentUser()
-
         if (!user || !['admin', 'super_admin'].includes(user.role)) {
-            return {
-                success: false,
-                message: ERROR_MESSAGES.UNAUTHORIZED,
-            }
+            return { success: false, message: 'Unauthorized' }
         }
 
-        const supabase = await createServerSupabaseClient()
+        const supabase = getAdminClient()
+        await supabase.from('profiles').update({
+            is_approved: false,
+            status: 'rejected'
+        }).eq('id', userId)
 
-        // Set approved ke false untuk ban user
-        const { error } = await supabase
-            .from('profiles')
-            .update({
-                is_approved: false,
-            })
-            .eq('id', userId)
-
-        if (error) {
-            console.error('Error banning user:', error)
-            return {
-                success: false,
-                message: ERROR_MESSAGES.SERVER_ERROR,
-            }
-        }
-
-        return {
-            success: true,
-            message: SUCCESS_MESSAGES.BAN_SUCCESS,
-        }
-    } catch (error) {
-        console.error('Error in banUser:', error)
-        return {
-            success: false,
-            message: ERROR_MESSAGES.SERVER_ERROR,
-        }
-    }
+        revalidatePath('/admin')
+        revalidatePath('/admin/users')
+        return { success: true, message: 'User berhasil ditolak/banned' }
+    } catch { return { success: false, message: 'Gagal memproses' } }
 }
 
-// ============================================================================
-// ACTION: CHANGE USER ROLE (Super Admin only)
-// ============================================================================
-
+// ----------------------------------------------------------------------------
+// 4. ACTION: CHANGE ROLE (Super Admin Only)
+// ----------------------------------------------------------------------------
 export async function changeUserRole(
     userId: string,
     newRole: 'member' | 'admin' | 'super_admin'
 ): Promise<ActionResult> {
     try {
         const user = await getCurrentUser()
-
         if (!user || user.role !== 'super_admin') {
-            return {
-                success: false,
-                message: ERROR_MESSAGES.UNAUTHORIZED,
-            }
+            return { success: false, message: 'Hanya Super Admin yang bisa mengubah role' }
         }
 
-        const supabase = await createServerSupabaseClient()
+        const supabase = getAdminClient()
+        await supabase.from('profiles').update({ role: newRole }).eq('id', userId)
 
-        const { error } = await supabase
-            .from('profiles')
-            .update({
-                role: newRole,
-            })
-            .eq('id', userId)
-
-        if (error) {
-            console.error('Error changing user role:', error)
-            return {
-                success: false,
-                message: ERROR_MESSAGES.SERVER_ERROR,
-            }
-        }
-
-        return {
-            success: true,
-            message: `Role berhasil diubah menjadi ${newRole}`,
-        }
-    } catch (error) {
-        console.error('Error in changeUserRole:', error)
-        return {
-            success: false,
-            message: ERROR_MESSAGES.SERVER_ERROR,
-        }
-    }
+        revalidatePath('/admin/users')
+        return { success: true, message: `Role diubah menjadi ${newRole}` }
+    } catch { return { success: false, message: 'Gagal mengubah role' } }
 }
 
-// ============================================================================
-// ACTION: GET USER STATISTICS
-// ============================================================================
-
-export async function getUserStatistics(): Promise<ActionResult<{
-    totalUsers: number
-    pendingApprovals: number
-    totalPhotos: number
-    totalStorage: number
-}>> {
+// ----------------------------------------------------------------------------
+// 5. ACTION: DELETE USER (Super Admin Only)
+// ----------------------------------------------------------------------------
+export async function deleteUser(userId: string): Promise<ActionResult> {
     try {
         const user = await getCurrentUser()
-
-        if (!user || !['admin', 'super_admin'].includes(user.role)) {
-            return {
-                success: false,
-                message: ERROR_MESSAGES.UNAUTHORIZED,
-            }
+        if (!user || user.role !== 'super_admin') {
+            return { success: false, message: 'Hanya Super Admin yang bisa menghapus user' }
         }
 
-        const supabase = await createServerSupabaseClient()
+        const supabase = getAdminClient()
 
-        // Get total users
-        const { count: totalUsers } = await supabase
-            .from('profiles')
-            .select('*', { count: 'exact', head: true })
+        // Hapus dari tabel profiles (Cascade akan menghapus foto & data lain)
+        const { error } = await supabase.from('profiles').delete().eq('id', userId)
+        if (error) throw error
 
-        // Get pending approvals
-        const { count: pendingApprovals } = await supabase
-            .from('profiles')
-            .select('*', { count: 'exact', head: true })
-            .eq('is_verified', true)
-            .eq('is_approved', false)
+        revalidatePath('/admin/users')
+        return { success: true, message: 'User berhasil dihapus permanen' }
+    } catch { return { success: false, message: 'Gagal menghapus user' } }
+}
 
-        // Get total photos
-        const { count: totalPhotos } = await supabase
-            .from('photos')
-            .select('*', { count: 'exact', head: true })
-            .eq('is_deleted', false)
+// ----------------------------------------------------------------------------
+// 6. STATISTICS
+// ----------------------------------------------------------------------------
+export async function getUserStatistics() {
+    try {
+        const user = await getCurrentUser()
+        if (!user || !['admin', 'super_admin'].includes(user.role)) return { success: false, message: 'Unauthorized' }
 
-        // Get total storage (sum of file sizes)
-        const { data: photos } = await supabase
-            .from('photos')
-            .select('file_size')
-            .eq('is_deleted', false)
+        const supabase = getAdminClient()
 
-        const totalStorage = photos?.reduce((sum, p) => sum + p.file_size, 0) || 0
+        // Gunakan Promise.all untuk performa
+        const [users, pending, photos, storage] = await Promise.all([
+            supabase.from('profiles').select('*', { count: 'exact', head: true }),
+            supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+            supabase.from('photos').select('*', { count: 'exact', head: true }).eq('is_deleted', false),
+            supabase.from('photos').select('file_size').eq('is_deleted', false)
+        ])
+
+        const totalStorage = storage.data?.reduce((acc, curr) => acc + (curr.file_size || 0), 0) || 0
 
         return {
             success: true,
-            message: 'Statistics fetched successfully',
+            message: 'Stats loaded',
             data: {
-                totalUsers: totalUsers || 0,
-                pendingApprovals: pendingApprovals || 0,
-                totalPhotos: totalPhotos || 0,
-                totalStorage,
-            },
+                totalUsers: users.count || 0,
+                pendingApprovals: pending.count || 0,
+                totalPhotos: photos.count || 0,
+                totalStorage
+            }
         }
-    } catch (error) {
-        console.error('Error in getUserStatistics:', error)
-        return {
-            success: false,
-            message: ERROR_MESSAGES.SERVER_ERROR,
-        }
-    }
+    } catch { return { success: false, message: 'Error loading stats' } }
 }

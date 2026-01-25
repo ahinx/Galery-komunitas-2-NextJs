@@ -50,27 +50,27 @@ INSERT INTO public.profiles (
 ) VALUES 
     -- Super Admin (password: 123456)
     (
-        'Super Admin Utama',
+        'ahink',
         '+6285157300793',
-        '${superAdminHash}',
+        'PASTE_HASH_BARU_UNTUK_123456_DISINI', -- <--- Ganti ini
         'super_admin',
         TRUE,
         TRUE
     ),
     -- Admin (password: admin123)
     (
-        'Admin User',
+        'febri',
         '+6285124616060',
-        '${adminHash}',
+        'PASTE_HASH_BARU_UNTUK_ADMIN123_DISINI', -- <--- Ganti ini
         'admin',
         TRUE,
         TRUE
     ),
     -- Member (password: member123)
     (
-        'Member Test',
-        '+6289876543210',
-        '${memberHash}',
+        'Member',
+        '+6285124616050',
+        'PASTE_HASH_BARU_UNTUK_MEMBER123_DISINI', -- <--- Ganti ini
         'member',
         TRUE,
         TRUE

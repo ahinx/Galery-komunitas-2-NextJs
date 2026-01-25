@@ -1,11 +1,12 @@
 // ============================================================================
-// UTILITY FUNCTIONS
+// UTILITY FUNCTIONS (MERGED)
 // File: src/lib/utils.ts
 // Deskripsi: Helper functions untuk berbagai keperluan aplikasi
 // ============================================================================
 
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import type { Photo } from '@/lib/supabase/client'
 
 // --- TAILWIND CSS UTILITIES ---
 export function cn(...inputs: ClassValue[]) {
@@ -45,9 +46,11 @@ export function formatRelativeTime(date: string | Date): string {
     return formatDate(d)
 }
 
-export function groupPhotosByDate<T extends { created_at: string }>(
-    photos: T[]
-): Record<string, T[]> {
+/**
+ * Group photos by month/year untuk gallery dengan sticky headers
+ * Returns: { "Januari 2025": Photo[], "Desember 2024": Photo[], ... }
+ */
+export function groupPhotosByDate(photos: Photo[]): Record<string, Photo[]> {
     return photos.reduce((groups, photo) => {
         const date = new Date(photo.created_at)
         const key = new Intl.DateTimeFormat('id-ID', {
@@ -61,7 +64,7 @@ export function groupPhotosByDate<T extends { created_at: string }>(
         groups[key].push(photo)
 
         return groups
-    }, {} as Record<string, T[]>)
+    }, {} as Record<string, Photo[]>)
 }
 
 // --- FILE SIZE UTILITIES ---
@@ -94,9 +97,7 @@ export function formatPhoneNumber(phone: string): string {
  * Format nomor telepon khusus untuk API Fonnte (Hanya angka)
  */
 export function formatPhoneForFonnte(phone: string): string {
-    // Ambil nomor yang sudah diformat standar (+628...)
     const formatted = formatPhoneNumber(phone);
-    // Hapus karakter '+' agar menjadi '628...'
     return formatted.replace('+', '');
 }
 
@@ -141,6 +142,18 @@ export function randomString(length: number = 16): string {
     return result
 }
 
+/**
+ * Generate initials from name (untuk avatar)
+ */
+export function getInitials(name: string): string {
+    return name
+        .split(' ')
+        .map(word => word.charAt(0))
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+}
+
 // --- IMAGE UTILITIES ---
 export function isImageFile(file: File): boolean {
     return file.type.startsWith('image/')
@@ -169,6 +182,24 @@ export function generateFileName(originalName: string): string {
     return `${timestamp}-${random}.${ext}`
 }
 
+/**
+ * Validate image file untuk upload
+ */
+export function isValidImageFile(file: File): { valid: boolean; error?: string } {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    const maxSize = 10 * 1024 * 1024 // 10MB
+
+    if (!allowedTypes.includes(file.type)) {
+        return { valid: false, error: 'Format file tidak didukung. Gunakan JPG, PNG, WEBP, atau GIF.' }
+    }
+
+    if (file.size > maxSize) {
+        return { valid: false, error: 'Ukuran file terlalu besar. Maksimal 10MB.' }
+    }
+
+    return { valid: true }
+}
+
 // --- ARRAY UTILITIES ---
 export function chunkArray<T>(array: T[], size: number): T[][] {
     const chunks: T[][] = []
@@ -182,7 +213,6 @@ export function shuffleArray<T>(array: T[]): T[] {
     const shuffled = [...array];
     for (let i = shuffled.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        // Penulisan destructuring yang aman dengan semicolon di awal
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
     return shuffled;
@@ -240,4 +270,37 @@ export function getErrorMessage(error: unknown): string {
 
 export function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// --- COLOR UTILITIES (untuk Avatar) ---
+/**
+ * Generate consistent color from string
+ */
+export function stringToColor(str: string): string {
+    let hash = 0
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash)
+    }
+
+    const colors = [
+        'bg-red-500',
+        'bg-orange-500',
+        'bg-amber-500',
+        'bg-yellow-500',
+        'bg-lime-500',
+        'bg-green-500',
+        'bg-emerald-500',
+        'bg-teal-500',
+        'bg-cyan-500',
+        'bg-sky-500',
+        'bg-blue-500',
+        'bg-indigo-500',
+        'bg-violet-500',
+        'bg-purple-500',
+        'bg-fuchsia-500',
+        'bg-pink-500',
+        'bg-rose-500',
+    ]
+
+    return colors[Math.abs(hash) % colors.length]
 }

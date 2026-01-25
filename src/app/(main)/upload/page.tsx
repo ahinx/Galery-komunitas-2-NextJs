@@ -35,13 +35,13 @@ export default async function UploadPage() {
               Upload Foto
             </h1>
           </div>
-          <p className="text-gray-600 dark:text-gray-400">
+          {/* <p className="text-gray-600 dark:text-gray-400">
             Upload foto Anda ke galeri komunitas. File akan dikompresi otomatis.
-          </p>
+          </p> */}
         </div>
 
         {/* Info Banner */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
+        {/* <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0 text-blue-600 dark:text-blue-400 mt-0.5">
               ℹ️
@@ -55,7 +55,7 @@ export default async function UploadPage() {
               </ul>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Upload Component */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">

@@ -1,93 +1,87 @@
 // ============================================================================
-// IMAGE COMPRESSION UTILITY
+// IMAGE UTILS & COMPRESSION SERVICE
 // File: src/lib/image-compression.ts
-// Deskripsi: Kompresi gambar di client-side sebelum upload
+// Deskripsi: Centralized logic untuk manipulasi, validasi, dan kompresi gambar
 // ============================================================================
 
 import imageCompression from 'browser-image-compression'
-import { UPLOAD_CONFIG } from './constants'
 
-// ============================================================================
-// COMPRESSION OPTIONS
-// ============================================================================
-
-const DEFAULT_OPTIONS = {
-    maxSizeMB: 1, // Maksimal ukuran file setelah kompresi (MB)
-    maxWidthOrHeight: UPLOAD_CONFIG.COMPRESSION_MAX_WIDTH, // Maksimal dimensi
-    useWebWorker: true, // Gunakan web worker untuk performa
-    fileType: 'image/webp', // Convert ke WebP untuk ukuran lebih kecil
+// --- CONFIGURATION ---
+const COMPRESSION_OPTIONS = {
+    maxSizeMB: 1,           // Target size < 1MB
+    maxWidthOrHeight: 1920, // Full HD standard
+    useWebWorker: true,     // Multithreading
+    fileType: 'image/webp', // Force WebP
+    initialQuality: 0.8     // High Quality
 }
 
-// ============================================================================
-// COMPRESS IMAGE
-// ============================================================================
-
+// ----------------------------------------------------------------------------
+// 1. CORE COMPRESSION (SINGLE)
+// ----------------------------------------------------------------------------
 export async function compressImage(file: File): Promise<File> {
+    // Validasi dasar dulu
+    if (!isValidImage(file)) {
+        throw new Error('File bukan gambar yang valid')
+    }
+
     try {
-        console.log(`🖼️ Compressing image: ${file.name}`)
-        console.log(`📦 Original size: ${(file.size / 1024 / 1024).toFixed(2)} MB`)
+        const compressedBlob = await imageCompression(file, COMPRESSION_OPTIONS)
 
-        const compressedFile = await imageCompression(file, DEFAULT_OPTIONS)
+        // Rename extension ke .webp
+        const newFileName = file.name.replace(/\.[^/.]+$/, "") + ".webp"
 
-        console.log(`✅ Compressed size: ${(compressedFile.size / 1024 / 1024).toFixed(2)} MB`)
-        console.log(`📊 Compression ratio: ${((1 - compressedFile.size / file.size) * 100).toFixed(1)}%`)
-
-        return compressedFile
+        return new File([compressedBlob], newFileName, {
+            type: 'image/webp',
+            lastModified: Date.now(),
+        })
     } catch (error) {
-        console.error('❌ Compression error:', error)
-        // Jika kompresi gagal, return file asli
+        console.error("Compression failed:", error)
+        // Fallback: Kembalikan file asli jika gagal kompres
         return file
     }
 }
 
-// ============================================================================
-// BATCH COMPRESS (untuk multiple files)
-// ============================================================================
-
+// ----------------------------------------------------------------------------
+// 2. BATCH COMPRESS (MULTIPLE FILES)
+// ----------------------------------------------------------------------------
 export async function compressImages(files: File[]): Promise<File[]> {
-    const compressionPromises = files.map(file => compressImage(file))
-    return Promise.all(compressionPromises)
+    // Jalankan kompresi secara paralel (Promise.all) untuk performa maksimal
+    const promises = files.map(file => compressImage(file))
+    return Promise.all(promises)
 }
 
-// ============================================================================
-// VALIDATE IMAGE FILE
-// ============================================================================
+// ----------------------------------------------------------------------------
+// 3. VALIDATE IMAGE FILE
+// ----------------------------------------------------------------------------
+export function isValidImage(file: File): boolean {
+    // Cek tipe MIME
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/jpg']
+    if (!validTypes.includes(file.type)) return false
 
-export function validateImageFile(file: File): {
-    valid: boolean
-    error?: string
-} {
-    // Check tipe file
-    if (!UPLOAD_CONFIG.ALLOWED_TYPES.includes(file.type)) {
-        return {
-            valid: false,
-            error: 'Tipe file tidak didukung. Gunakan JPG, PNG, atau WebP',
-        }
-    }
+    // Cek Size (Contoh: Max input 20MB sebelum kompres)
+    const MAX_INPUT_SIZE = 20 * 1024 * 1024 // 20MB
+    if (file.size > MAX_INPUT_SIZE) return false
 
-    // Check ukuran file
-    if (file.size > UPLOAD_CONFIG.MAX_FILE_SIZE_BYTES) {
-        return {
-            valid: false,
-            error: `Ukuran file terlalu besar. Maksimal ${UPLOAD_CONFIG.MAX_FILE_SIZE_MB}MB`,
-        }
-    }
-
-    return { valid: true }
+    return true
 }
 
-// ============================================================================
-// GET IMAGE PREVIEW URL
-// ============================================================================
+// ----------------------------------------------------------------------------
+// 4. PREVIEW UTILS (MEMORY MANAGEMENT)
+// ----------------------------------------------------------------------------
 
+/**
+ * Membuat URL preview sementara
+ */
 export function getImagePreviewUrl(file: File): string {
     return URL.createObjectURL(file)
 }
 
-// ============================================================================
-// REVOKE PREVIEW URL (untuk cleanup memory)
-// ============================================================================
-
-export function revokeImagePreviewUrl(url: string): void {
-    URL.revokeObjectURL(url)
+/**
+ * Membersihkan URL dari memori browser (PENTING untuk mencegah memory leak)
+ * Panggil ini saat komponen unmount atau foto dihapus dari list
+ */
+export function revokePreviewUrl(url: string): void {
+    if (url && url.startsWith('blob:')) {
+        URL.revokeObjectURL(url)
+    }
 }

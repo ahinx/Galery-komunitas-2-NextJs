@@ -1,13 +1,13 @@
 // ============================================================================
-// AUTHENTICATION SERVER ACTIONS - Password System
+// AUTHENTICATION SERVER ACTIONS - Password System (DEBUG VERSION)
 // File: src/actions/auth.ts
 // Deskripsi: Complete auth dengan registration, login, reset password
-// Menggunakan built-in crypto (tidak perlu bcrypt external)
+// Menggunakan built-in crypto & Service Role untuk Bypass RLS
 // ============================================================================
 
 'use server'
 
-import { createServerSupabaseClient } from '@/lib/supabase/client'
+import { createClient } from '@supabase/supabase-js' // Gunakan Client Admin
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { randomBytes, scrypt, timingSafeEqual } from 'crypto'
@@ -18,8 +18,45 @@ import {
     generateOTP
 } from '@/lib/utils'
 
+
+
+// --- CONFIG ---
+const APP_NAME = "GaleriKomunitas"
+const OTP_DURATION_MINUTES = 1
+
 // ============================================================================
-// CRYPTO HELPERS (Built-in Node.js - No External Dependencies)
+// 1. LOGGER & ADMIN CLIENT SETUP
+// ============================================================================
+
+// Helper untuk mencatat log rapi di Terminal
+function debugLog(step: string, data?: any) {
+    console.log(`\n🔍 [AUTH-DEBUG] ${step}`)
+    if (data) console.log(JSON.stringify(data, null, 2))
+}
+
+// Client Admin (Wajib untuk Login/Register saat RLS aktif)
+function getAdminClient() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    const keyStatus = serviceRoleKey ? `✅ Ada (${serviceRoleKey.substring(0, 5)}...)` : '❌ MISSING'
+
+    // Log hanya jika error kritis (supaya tidak spam)
+    if (!supabaseUrl || !serviceRoleKey) {
+        debugLog('Check Env Var', { url: supabaseUrl, key: keyStatus })
+        throw new Error('FATAL: SUPABASE_SERVICE_ROLE_KEY tidak ditemukan di .env.local')
+    }
+
+    return createClient(supabaseUrl, serviceRoleKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    })
+}
+
+// ============================================================================
+// 2. CRYPTO HELPERS (Built-in Node.js)
 // ============================================================================
 
 const scryptAsync = promisify(scrypt)
@@ -40,13 +77,22 @@ async function hashPassword(password: string): Promise<string> {
 async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
     try {
         const [salt, hash] = storedHash.split(':')
+
+        debugLog('Verify Password Detail', {
+            saltLength: salt?.length,
+            hashLength: hash?.length
+        })
+
         if (!salt || !hash) return false
 
         const derivedKey = await scryptAsync(password, salt, 64) as Buffer
         const hashBuffer = Buffer.from(hash, 'hex')
 
-        return timingSafeEqual(derivedKey, hashBuffer)
-    } catch {
+        const match = timingSafeEqual(derivedKey, hashBuffer)
+        debugLog('Password Match Result', { match })
+        return match
+    } catch (e) {
+        console.error('Password Verify Error', e)
         return false
     }
 }
@@ -71,6 +117,7 @@ async function sendOtpWhatsApp(
     type: 'registration' | 'reset_password'
 ): Promise<boolean> {
     const fonteToken = process.env.FONNTE_TOKEN
+    debugLog('Send WA Start', { phone: phoneNumber, type, hasToken: !!fonteToken })
 
     if (!fonteToken) {
         console.error('❌ FONNTE_TOKEN tidak ditemukan')
@@ -96,13 +143,13 @@ async function sendOtpWhatsApp(
         })
 
         const result = await response.json()
+        debugLog('Fonnte Response', result)
 
         if (!response.ok) {
             console.error('❌ Fonnte API error:', result)
             return false
         }
 
-        console.log('✅ OTP terkirim ke', phoneNumber)
         return result.status === true || result.status === 'success'
     } catch (error) {
         console.error('❌ Error sending WhatsApp OTP:', error)
@@ -118,6 +165,8 @@ export async function sendOTP(
     phoneNumber: string,
     type: 'registration' | 'reset_password' = 'registration'
 ): Promise<ActionResult<{ expiresAt: string }>> {
+    debugLog('🚀 ACTION: sendOTP', { phoneNumber, type })
+
     try {
         // Validasi format
         if (!isValidPhoneNumber(phoneNumber)) {
@@ -128,14 +177,18 @@ export async function sendOTP(
         }
 
         const formattedPhone = formatPhoneNumber(phoneNumber)
-        const supabase = await createServerSupabaseClient()
+
+        // GUNAKAN ADMIN CLIENT (Bypass RLS)
+        const supabase = getAdminClient()
 
         // Cek apakah nomor sudah terdaftar
-        const { data: existingUser } = await supabase
+        const { data: existingUser, error: checkError } = await supabase
             .from('profiles')
             .select('id, is_verified')
             .eq('phone_number', formattedPhone)
             .single()
+
+        debugLog('Check Existing User', { found: !!existingUser, error: checkError?.message })
 
         if (type === 'registration' && existingUser) {
             return {
@@ -155,7 +208,9 @@ export async function sendOTP(
         const otpCode = generateOTP()
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 menit
 
-        // Simpan OTP ke database
+        debugLog('OTP Generated', { otpCode, expiresAt })
+
+        // Simpan OTP ke database (Pakai Admin Client)
         const { error: otpError } = await supabase
             .from('otp_codes')
             .insert({
@@ -177,6 +232,9 @@ export async function sendOTP(
         const sent = await sendOtpWhatsApp(formattedPhone, otpCode, type)
 
         if (!sent) {
+            // Log untuk Developer jika WA gagal (Bisa lihat kode di terminal)
+            console.log(`⚠️ [DEV MODE] WA Gagal. Kode OTP: ${otpCode}`)
+
             // Rollback OTP jika gagal kirim
             await supabase
                 .from('otp_codes')
@@ -197,11 +255,11 @@ export async function sendOTP(
                 expiresAt: expiresAt.toISOString(),
             },
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error('❌ Error in sendOTP:', error)
         return {
             success: false,
-            message: '❌ Terjadi kesalahan server. Silakan hubungi admin.',
+            message: `❌ Terjadi kesalahan server: ${error.message}`,
         }
     }
 }
@@ -216,38 +274,28 @@ export async function register(
     password: string,
     otpCode: string
 ): Promise<ActionResult> {
+    debugLog('🚀 ACTION: register', { fullName, phoneNumber })
+
     try {
         // Validasi input
         if (!fullName || fullName.trim().length < 3) {
-            return {
-                success: false,
-                message: '❌ Nama lengkap minimal 3 karakter',
-            }
+            return { success: false, message: '❌ Nama lengkap minimal 3 karakter' }
         }
 
         if (!isValidPhoneNumber(phoneNumber)) {
-            return {
-                success: false,
-                message: '❌ Format nomor tidak valid',
-            }
+            return { success: false, message: '❌ Format nomor tidak valid' }
         }
 
         if (!password || password.length < 6) {
-            return {
-                success: false,
-                message: '❌ Password minimal 6 karakter',
-            }
+            return { success: false, message: '❌ Password minimal 6 karakter' }
         }
 
         if (!/^\d{6}$/.test(otpCode)) {
-            return {
-                success: false,
-                message: '❌ Kode OTP harus 6 digit angka',
-            }
+            return { success: false, message: '❌ Kode OTP harus 6 digit angka' }
         }
 
         const formattedPhone = formatPhoneNumber(phoneNumber)
-        const supabase = await createServerSupabaseClient()
+        const supabase = getAdminClient() // Pakai Admin Client
 
         // Cek apakah nomor sudah terdaftar
         const { data: existingUser } = await supabase
@@ -257,10 +305,7 @@ export async function register(
             .single()
 
         if (existingUser) {
-            return {
-                success: false,
-                message: '❌ Nomor WhatsApp sudah terdaftar',
-            }
+            return { success: false, message: '❌ Nomor WhatsApp sudah terdaftar' }
         }
 
         // Verifikasi OTP
@@ -276,23 +321,19 @@ export async function register(
             .limit(1)
             .single()
 
+        debugLog('Check OTP Result', { valid: !!otpData, error: otpError?.message })
+
         if (otpError || !otpData) {
-            return {
-                success: false,
-                message: '❌ Kode OTP tidak valid atau sudah kadaluarsa',
-            }
+            return { success: false, message: '❌ Kode OTP tidak valid atau sudah kadaluarsa' }
         }
 
-        // Check attempt count
         if (otpData.attempt_count >= 3) {
-            return {
-                success: false,
-                message: '❌ Terlalu banyak percobaan. Minta kode OTP baru.',
-            }
+            return { success: false, message: '❌ Terlalu banyak percobaan. Minta kode OTP baru.' }
         }
 
         // Hash password menggunakan built-in crypto
         const passwordHash = await hashPassword(password)
+        debugLog('Password Hashed', { length: passwordHash.length })
 
         // Buat user baru
         const { data: newUser, error: createError } = await supabase
@@ -310,31 +351,23 @@ export async function register(
 
         if (createError) {
             console.error('❌ Error creating user:', createError)
-            return {
-                success: false,
-                message: '❌ Terjadi kesalahan server. Silakan hubungi admin.',
-            }
+            return { success: false, message: '❌ Terjadi kesalahan server.' }
         }
 
         // Mark OTP sebagai used
         await supabase
             .from('otp_codes')
-            .update({
-                is_used: true,
-                used_at: new Date().toISOString(),
-            })
+            .update({ is_used: true, used_at: new Date().toISOString() })
             .eq('id', otpData.id)
 
+        debugLog('✅ Register Success')
         return {
             success: true,
             message: '✅ Registrasi berhasil! Silakan login dengan nomor dan password Anda.',
         }
     } catch (error) {
         console.error('❌ Error in register:', error)
-        return {
-            success: false,
-            message: '❌ Terjadi kesalahan server. Silakan hubungi admin.',
-        }
+        return { success: false, message: '❌ Terjadi kesalahan server.' }
     }
 }
 
@@ -346,56 +379,48 @@ export async function login(
     identifier: string, // Bisa nomor WA atau nama
     password: string
 ): Promise<ActionResult<{ needsApproval: boolean }>> {
+    debugLog('🚀 ACTION: login', { identifier })
+
     try {
-        // Validasi input
         if (!identifier || !password) {
-            return {
-                success: false,
-                message: '❌ Nomor/Nama dan password harus diisi',
-            }
+            return { success: false, message: '❌ Nomor/Nama dan password harus diisi' }
         }
 
-        const supabase = await createServerSupabaseClient()
+        // PENTING: Gunakan Admin Client untuk mencari user (Bypass RLS)
+        const supabase = getAdminClient()
 
-        // Cari user berdasarkan nomor WA atau nama
-        let query = supabase
-            .from('profiles')
-            .select('*')
+        let query = supabase.from('profiles').select('*')
 
         // Cek apakah identifier adalah nomor WA
         if (identifier.startsWith('+') || identifier.startsWith('08') || identifier.startsWith('62')) {
             const formattedPhone = formatPhoneNumber(identifier)
+            debugLog('Search by Phone', formattedPhone)
             query = query.eq('phone_number', formattedPhone)
         } else {
-            // Search by name (case-insensitive)
+            debugLog('Search by Name', identifier)
             query = query.ilike('full_name', identifier)
         }
 
         const { data: user, error } = await query.single()
 
         if (error || !user) {
-            return {
-                success: false,
-                message: '❌ Nomor/Nama tidak terdaftar. Pastikan data Anda benar.',
-            }
+            debugLog('❌ User Not Found', { error: error?.message })
+            return { success: false, message: '❌ Nomor/Nama tidak terdaftar. Pastikan data Anda benar.' }
         }
+
+        debugLog('User Found', { id: user.id, role: user.role })
 
         // Verify password menggunakan built-in crypto
         const isPasswordValid = await verifyPassword(password, user.password_hash)
 
         if (!isPasswordValid) {
-            return {
-                success: false,
-                message: '❌ Password salah. Silakan coba lagi.',
-            }
+            debugLog('❌ Invalid Password')
+            return { success: false, message: '❌ Password salah. Silakan coba lagi.' }
         }
 
         // Check verification status
         if (!user.is_verified) {
-            return {
-                success: false,
-                message: '❌ Akun Anda belum diverifikasi. Silakan hubungi admin.',
-            }
+            return { success: false, message: '❌ Akun Anda belum diverifikasi. Silakan hubungi admin.' }
         }
 
         // Update last login
@@ -413,6 +438,7 @@ export async function login(
             maxAge: 60 * 60 * 24 * 30, // 30 hari
         })
 
+        debugLog('✅ Login Success, Session Created')
         return {
             success: true,
             message: `✅ Selamat datang, ${user.full_name}!`,
@@ -422,10 +448,7 @@ export async function login(
         }
     } catch (error) {
         console.error('❌ Error in login:', error)
-        return {
-            success: false,
-            message: '❌ Terjadi kesalahan server. Silakan hubungi admin.',
-        }
+        return { success: false, message: '❌ Terjadi kesalahan server.' }
     }
 }
 
@@ -438,31 +461,23 @@ export async function resetPassword(
     otpCode: string,
     newPassword: string
 ): Promise<ActionResult> {
+    debugLog('🚀 ACTION: resetPassword', { phoneNumber })
+
     try {
-        // Validasi
         if (!isValidPhoneNumber(phoneNumber)) {
-            return {
-                success: false,
-                message: '❌ Format nomor tidak valid',
-            }
+            return { success: false, message: '❌ Format nomor tidak valid' }
         }
 
         if (!/^\d{6}$/.test(otpCode)) {
-            return {
-                success: false,
-                message: '❌ Kode OTP harus 6 digit',
-            }
+            return { success: false, message: '❌ Kode OTP harus 6 digit' }
         }
 
         if (newPassword.length < 6) {
-            return {
-                success: false,
-                message: '❌ Password minimal 6 karakter',
-            }
+            return { success: false, message: '❌ Password minimal 6 karakter' }
         }
 
         const formattedPhone = formatPhoneNumber(phoneNumber)
-        const supabase = await createServerSupabaseClient()
+        const supabase = getAdminClient() // Pakai Admin Client
 
         // Verifikasi OTP
         const { data: otpData } = await supabase
@@ -478,13 +493,10 @@ export async function resetPassword(
             .single()
 
         if (!otpData) {
-            return {
-                success: false,
-                message: '❌ Kode OTP tidak valid atau sudah kadaluarsa',
-            }
+            return { success: false, message: '❌ Kode OTP tidak valid atau sudah kadaluarsa' }
         }
 
-        // Hash password baru menggunakan built-in crypto
+        // Hash password baru
         const passwordHash = await hashPassword(newPassword)
 
         // Update password
@@ -494,10 +506,7 @@ export async function resetPassword(
             .eq('phone_number', formattedPhone)
 
         if (updateError) {
-            return {
-                success: false,
-                message: '❌ Gagal mereset password. Silakan coba lagi.',
-            }
+            return { success: false, message: '❌ Gagal mereset password.' }
         }
 
         // Mark OTP as used
@@ -506,16 +515,14 @@ export async function resetPassword(
             .update({ is_used: true, used_at: new Date().toISOString() })
             .eq('id', otpData.id)
 
+        debugLog('✅ Reset Password Success')
         return {
             success: true,
             message: '✅ Password berhasil direset! Silakan login dengan password baru.',
         }
     } catch (error) {
         console.error('❌ Error in resetPassword:', error)
-        return {
-            success: false,
-            message: '❌ Terjadi kesalahan server. Silakan hubungi admin.',
-        }
+        return { success: false, message: '❌ Terjadi kesalahan server.' }
     }
 }
 
@@ -523,14 +530,26 @@ export async function resetPassword(
 // ACTION: LOGOUT
 // ============================================================================
 
-export async function logout(): Promise<void> {
+// export async function logout(): Promise<void> {
+//     debugLog('🚀 ACTION: logout')
+//     const cookieStore = await cookies()
+//     cookieStore.delete('user_id')
+//     redirect('/login')
+// }
+
+export async function logout() {
+    console.log("Proses Logout...");
     const cookieStore = await cookies()
+
+    // Hapus semua cookie yang mungkin ada
     cookieStore.delete('user_id')
+
+    // Redirect ke login
     redirect('/login')
 }
 
 // ============================================================================
-// ACTION: GET CURRENT USER
+// ACTION: GET CURRENT USER (Khusus ini Boleh Pakai Client Biasa/Admin)
 // ============================================================================
 
 export async function getCurrentUser() {
@@ -540,7 +559,9 @@ export async function getCurrentUser() {
 
         if (!userId) return null
 
-        const supabase = await createServerSupabaseClient()
+        // Gunakan Admin Client agar bisa baca data user (walaupun RLS mungkin block client biasa)
+        const supabase = getAdminClient()
+
         const { data: profile } = await supabase
             .from('profiles')
             .select('*')
