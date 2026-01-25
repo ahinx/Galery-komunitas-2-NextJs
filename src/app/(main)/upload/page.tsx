@@ -65,7 +65,7 @@ export default async function UploadPage() {
         {/* Footer Tips */}
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Semua upload dilindungi dengan sistem audit siluman untuk keamanan komunitas
+            Pastikan anda upload foto yang sesuai dengan <strong>pedoman komunitas</strong> kami.
           </p>
         </div>
       </div>
