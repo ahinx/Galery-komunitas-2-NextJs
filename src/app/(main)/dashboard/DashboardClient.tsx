@@ -1,7 +1,7 @@
 // ============================================================================
-// DASHBOARD CLIENT COMPONENT (Final Clean)
+// DASHBOARD CLIENT COMPONENT (Global Stats)
 // File: src/app/(main)/dashboard/DashboardClient.tsx
-// - Stats centered, mini floating saat scroll
+// Deskripsi: Menampilkan stats global server-side & grid foto
 // ============================================================================
 
 'use client'
@@ -16,24 +16,40 @@ import {
 } from 'lucide-react'
 import type { Photo, Profile } from '@/lib/supabase/client'
 import { cn, formatFileSize } from '@/lib/utils'
+import { getPhotos } from '@/actions/photos'
+
+// Definisi tipe Stats
+interface DashboardStats {
+  total: number
+  thisMonth: number
+  totalSize: number
+}
 
 interface DashboardClientProps {
   initialPhotos: Photo[]
   user: Profile
   searchQuery: string
+  serverStats: DashboardStats // <--- Prop Baru
 }
 
 export default function DashboardClient({
   initialPhotos,
   user,
   searchQuery,
+  serverStats, 
 }: DashboardClientProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [photos] = useState(initialPhotos)
+  
+  const [photos, setPhotos] = useState<Photo[]>(initialPhotos)
   const [isScrolled, setIsScrolled] = useState(false)
 
-  // Detect scroll
+  // Sync photos saat navigasi balik/search
+  useEffect(() => {
+    setPhotos(initialPhotos)
+  }, [initialPhotos])
+
+  // Scroll detection
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 50)
@@ -42,56 +58,59 @@ export default function DashboardClient({
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Calculate stats
-  const stats = {
-    total: photos.length,
-    thisMonth: photos.filter(p => {
-      const photoDate = new Date(p.created_at)
-      const now = new Date()
-      return photoDate.getMonth() === now.getMonth() && 
-             photoDate.getFullYear() === now.getFullYear()
-    }).length,
-    totalSize: photos.reduce((sum, p) => sum + (p.file_size || 0), 0)
-  }
+  // Handler update: Refresh router agar stats di server dihitung ulang
+  const handlePhotosUpdated = useCallback(async () => {
+    startTransition(async () => {
+      router.refresh() // <--- Ini akan memicu fetch ulang getPhotoStats() di server
 
-  const handlePhotosUpdated = useCallback(() => {
-    startTransition(() => {
-      router.refresh()
+      // Update grid lokal biar UI responsif
+      try {
+        const res = await getPhotos({
+            searchQuery: searchQuery,
+            limit: 100
+        })
+        if (res.success && res.data) {
+            setPhotos(res.data.photos)
+        }
+      } catch (error) {
+        console.error("Gagal refresh data lokal", error)
+      }
     })
-  }, [router])
+  }, [router, searchQuery])
 
   return (
     <>
-      {/* Stats - Normal (sebelum scroll) */}
-      {photos.length > 0 && !isScrolled && (
+      {/* Stats Bar - Normal (Menampilkan Data Server Global) */}
+      {!isScrolled && (
         <div className="flex justify-center py-3 border-b border-gray-200/50 dark:border-gray-800/50">
           <div className="flex items-center gap-4 md:gap-6 text-xs md:text-sm">
             <div className="flex items-center gap-1.5">
               <Images className="w-3.5 h-3.5 text-blue-500" />
-              <span className="font-semibold text-gray-900 dark:text-white">{stats.total}</span>
-              <span className="text-gray-500">Total</span>
+              <span className="font-semibold text-gray-900 dark:text-white">{serverStats.total}</span>
+              <span className="text-gray-500">Total Foto</span>
             </div>
 
             <div className="w-px h-3 bg-gray-300 dark:bg-gray-600" />
 
             <div className="flex items-center gap-1.5">
               <TrendingUp className="w-3.5 h-3.5 text-green-500" />
-              <span className="font-semibold text-gray-900 dark:text-white">{stats.thisMonth}</span>
-              <span className="text-gray-500">Bulan ini</span>
+              <span className="font-semibold text-gray-900 dark:text-white">{serverStats.thisMonth}</span>
+              <span className="text-gray-500">Bulan Ini</span>
             </div>
 
             <div className="w-px h-3 bg-gray-300 dark:bg-gray-600" />
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5" title="Total penggunaan server">
               <HardDrive className="w-3.5 h-3.5 text-purple-500" />
-              <span className="font-semibold text-gray-900 dark:text-white">{formatFileSize(stats.totalSize)}</span>
+              <span className="font-semibold text-gray-900 dark:text-white">{formatFileSize(serverStats.totalSize)}</span>
+              <span className="text-gray-500 hidden sm:inline">Terpakai</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Stats - Mini Floating (saat scroll) */}
-      {photos.length > 0 && isScrolled && (
+      {/* Stats Bar - Mini Floating */}
+      {isScrolled && (
         <div className="fixed top-16 md:top-20 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className={cn(
             'flex items-center gap-3 px-3 py-1.5 rounded-full',
@@ -101,21 +120,14 @@ export default function DashboardClient({
           )}>
             <div className="flex items-center gap-1">
               <Images className="w-3 h-3 text-blue-500" />
-              <span className="font-semibold text-gray-900 dark:text-white">{stats.total}</span>
-            </div>
-
-            <div className="w-px h-2.5 bg-gray-300 dark:bg-gray-600" />
-
-            <div className="flex items-center gap-1">
-              <TrendingUp className="w-3 h-3 text-green-500" />
-              <span className="font-semibold text-gray-900 dark:text-white">{stats.thisMonth}</span>
+              <span className="font-semibold text-gray-900 dark:text-white">{serverStats.total}</span>
             </div>
 
             <div className="w-px h-2.5 bg-gray-300 dark:bg-gray-600" />
 
             <div className="flex items-center gap-1">
               <HardDrive className="w-3 h-3 text-purple-500" />
-              <span className="font-semibold text-gray-900 dark:text-white">{formatFileSize(stats.totalSize)}</span>
+              <span className="font-semibold text-gray-900 dark:text-white">{formatFileSize(serverStats.totalSize)}</span>
             </div>
           </div>
         </div>
@@ -126,8 +138,7 @@ export default function DashboardClient({
         {photos.length > 0 ? (
           <PhotoGrid
             photos={photos}
-            showUserInfo={user.role !== 'member'}
-            canDelete={true}
+            currentUser={user} 
             onPhotosUpdated={handlePhotosUpdated}
           />
         ) : (
@@ -137,13 +148,13 @@ export default function DashboardClient({
             </div>
             
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              {searchQuery ? 'Tidak ada hasil' : 'Belum ada foto'}
+              {searchQuery ? 'Tidak ada hasil' : 'Galeri Kosong'}
             </h3>
             
             <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs">
               {searchQuery 
                 ? 'Coba kata kunci lain.' 
-                : 'Upload foto pertama Anda melalui menu Upload.'}
+                : 'Jadilah yang pertama mengupload foto!'}
             </p>
           </div>
         )}
@@ -154,7 +165,7 @@ export default function DashboardClient({
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[100] flex items-center justify-center">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-2xl flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-gray-600 dark:text-gray-400">Memuat...</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Sinkronisasi data...</p>
           </div>
         </div>
       )}

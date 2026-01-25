@@ -1,8 +1,7 @@
 // ============================================================================
-// PHOTO GRID COMPONENT (Fixed UX)
+// PHOTO GRID COMPONENT (Permission Aware)
 // File: src/components/gallery/PhotoGrid.tsx
-// - Long press langsung aktifkan selection + selection bar muncul
-// - Download berfungsi dari selection bar
+// Deskripsi: Grid foto dengan logika izin hapus granular (Pemilik/Admin)
 // ============================================================================
 
 'use client'
@@ -11,7 +10,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import PhotoCard from './PhotoCard'
 import PhotoLightbox from './PhotoLightbox'
 import DownloadModal from './DownloadModal'
-import type { Photo } from '@/lib/supabase/client'
+import type { Photo, Profile } from '@/lib/supabase/client'
 import { groupPhotosByDate } from '@/lib/utils'
 import { 
   Download, 
@@ -25,15 +24,13 @@ import { cn } from '@/lib/utils'
 
 interface PhotoGridProps {
   photos: Photo[]
-  showUserInfo?: boolean
-  canDelete?: boolean
+  currentUser: Profile // <--- UPDATE: Menerima object User lengkap
   onPhotosUpdated?: () => void
 }
 
 export default function PhotoGrid({
   photos,
-  showUserInfo = false,
-  canDelete = false,
+  currentUser,
   onPhotosUpdated,
 }: PhotoGridProps) {
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set())
@@ -45,13 +42,16 @@ export default function PhotoGrid({
   const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [downloadPhotos, setDownloadPhotos] = useState<Photo[]>([])
 
+  // LOGIKA PERMISSION: Cek apakah user boleh menghapus foto ini
+  const canUserDeletePhoto = useCallback((photo: Photo) => {
+    // Admin & Super Admin boleh hapus semua
+    if (['admin', 'super_admin'].includes(currentUser.role)) return true
+    // Member hanya boleh hapus miliknya sendiri
+    return photo.user_id === currentUser.id
+  }, [currentUser])
+
   const groupedPhotos = useMemo(() => groupPhotosByDate(photos), [photos])
   const flatPhotos = useMemo(() => photos, [photos])
-
-  const selectedPhotosArray = useMemo(() => 
-    photos.filter(p => selectedPhotos.has(p.id)), 
-    [photos, selectedPhotos]
-  )
 
   // Toggle selection untuk single photo
   const handleSelect = useCallback((photoId: string) => {
@@ -59,10 +59,7 @@ export default function PhotoGrid({
       const newSet = new Set(prev)
       if (newSet.has(photoId)) {
         newSet.delete(photoId)
-        // Jika tidak ada yang terpilih, matikan selection mode
-        if (newSet.size === 0) {
-          setIsSelecting(false)
-        }
+        if (newSet.size === 0) setIsSelecting(false)
       } else {
         newSet.add(photoId)
       }
@@ -70,7 +67,7 @@ export default function PhotoGrid({
     })
   }, [])
 
-  // Long press - aktifkan selection mode dan pilih foto tersebut
+  // Long press
   const handleLongPress = useCallback((photoId: string) => {
     setIsSelecting(true)
     setSelectedPhotos(new Set([photoId]))
@@ -99,12 +96,11 @@ export default function PhotoGrid({
       } else {
         groupIds.forEach(id => newSet.add(id))
       }
-      
       return newSet
     })
   }, [])
 
-  // Preview photo di lightbox
+  // Preview & Lightbox
   const handlePreview = useCallback((photo: Photo) => {
     if (isSelecting) return
     const index = flatPhotos.findIndex(p => p.id === photo.id)
@@ -112,7 +108,6 @@ export default function PhotoGrid({
     setLightboxPhoto(photo)
   }, [flatPhotos, isSelecting])
 
-  // Lightbox navigation
   const handleLightboxPrev = useCallback(() => {
     const newIndex = lightboxIndex > 0 ? lightboxIndex - 1 : flatPhotos.length - 1
     setLightboxIndex(newIndex)
@@ -125,54 +120,55 @@ export default function PhotoGrid({
     setLightboxPhoto(flatPhotos[newIndex])
   }, [lightboxIndex, flatPhotos])
 
-  // Download single photo (dari tombol di card atau lightbox)
+  // Download logic
   const handleSingleDownload = useCallback((photo: Photo) => {
     setDownloadPhotos([photo])
     setShowDownloadModal(true)
   }, [])
 
-  // Download multiple photos (dari selection bar)
   const handleDownloadSelected = useCallback(() => {
     if (selectedPhotos.size === 0) return
-    
-    // Ambil foto yang dipilih
     const photosToDownload = photos.filter(p => selectedPhotos.has(p.id))
     setDownloadPhotos(photosToDownload)
-    
-    // Sembunyikan selection bar, tampilkan modal
     setIsSelecting(false)
     setShowDownloadModal(true)
   }, [selectedPhotos, photos])
 
-  // Saat download complete
   const handleDownloadComplete = useCallback(() => {
     setShowDownloadModal(false)
     setDownloadPhotos([])
     setSelectedPhotos(new Set())
   }, [])
 
-  // Saat modal ditutup tanpa download
   const handleDownloadClose = useCallback(() => {
     setShowDownloadModal(false)
-    
-    // Jika ada foto yang dipilih sebelumnya (bulk download), kembalikan selection
-    if (downloadPhotos.length > 1) {
-      setIsSelecting(true)
-    }
-    
+    if (downloadPhotos.length > 1) setIsSelecting(true)
     setDownloadPhotos([])
   }, [downloadPhotos.length])
 
-  // Delete selected photos
+  // --- DELETE LOGIC (UPDATED WITH PERMISSION) ---
+
   const handleDeleteSelected = async () => {
     if (selectedPhotos.size === 0) return
-    if (!confirm(`Hapus ${selectedPhotos.size} foto?`)) return
+
+    // Filter: Hanya hapus yang boleh dihapus user
+    const idsToDelete = Array.from(selectedPhotos).filter(id => {
+      const photo = photos.find(p => p.id === id)
+      return photo && canUserDeletePhoto(photo)
+    })
+
+    if (idsToDelete.length === 0) {
+      alert("Anda tidak memiliki izin untuk menghapus foto yang dipilih.")
+      return
+    }
+
+    if (!confirm(`Hapus ${idsToDelete.length} foto?`)) return
 
     setIsProcessing(true)
     setProcessingText('Menghapus...')
 
     try {
-      const result = await bulkSoftDelete(Array.from(selectedPhotos))
+      const result = await bulkSoftDelete(idsToDelete)
       if (result.success) {
         setSelectedPhotos(new Set())
         setIsSelecting(false)
@@ -188,7 +184,6 @@ export default function PhotoGrid({
     }
   }
 
-  // Delete single photo
   const handleSingleDelete = async (photoId: string) => {
     if (!confirm('Hapus foto ini?')) return
 
@@ -210,29 +205,30 @@ export default function PhotoGrid({
     }
   }
 
-  // Cancel selection
   const handleCancelSelection = useCallback(() => {
     setSelectedPhotos(new Set())
     setIsSelecting(false)
   }, [])
 
-  // Start selection mode (dari tombol "Pilih")
   const handleStartSelecting = useCallback(() => {
     setIsSelecting(true)
   }, [])
 
-  // Escape key to cancel
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isSelecting) {
-        handleCancelSelection()
-      }
+      if (e.key === 'Escape' && isSelecting) handleCancelSelection()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isSelecting, handleCancelSelection])
 
   if (photos.length === 0) return null
+
+  // Cek apakah tombol hapus massal harus muncul (ada minimal 1 foto milik user terpilih)
+  const showBulkDelete = Array.from(selectedPhotos).some(id => {
+    const p = photos.find(photo => photo.id === id)
+    return p && canUserDeletePhoto(p)
+  })
 
   return (
     <div className="relative">
@@ -272,20 +268,27 @@ export default function PhotoGrid({
 
             {/* Masonry Grid */}
             <div className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 xl:columns-6 gap-1.5 md:gap-2">
-              {groupPhotos.map(photo => (
-                <PhotoCard
-                  key={photo.id}
-                  photo={photo}
-                  isSelecting={isSelecting}
-                  isSelected={selectedPhotos.has(photo.id)}
-                  onSelect={handleSelect}
-                  onLongPress={handleLongPress}
-                  onPreview={handlePreview}
-                  onDownload={handleSingleDownload}
-                  onDelete={canDelete ? handleSingleDelete : undefined}
-                  showUserInfo={showUserInfo}
-                />
-              ))}
+              {groupPhotos.map(photo => {
+                // Tentukan izin hapus per foto
+                const canDelete = canUserDeletePhoto(photo)
+
+                return (
+                  <PhotoCard
+                    key={photo.id}
+                    photo={photo}
+                    isSelecting={isSelecting}
+                    isSelected={selectedPhotos.has(photo.id)}
+                    onSelect={handleSelect}
+                    onLongPress={handleLongPress}
+                    onPreview={handlePreview}
+                    onDownload={handleSingleDownload}
+                    // Hanya oper fungsi delete jika user punya izin
+                    onDelete={canDelete ? handleSingleDelete : undefined}
+                    // Tampilkan info user agar tahu siapa pemilik foto (Shared Gallery)
+                    showUserInfo={true}
+                  />
+                )
+              })}
             </div>
           </div>
         ))}
@@ -345,11 +348,11 @@ export default function PhotoGrid({
                   <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 </button>
 
-                {canDelete && (
+                {/* Tombol Hapus hanya muncul jika ada foto yang BISA dihapus terpilih */}
+                {showBulkDelete && (
                   <button
                     onClick={handleDeleteSelected}
-                    disabled={selectedPhotos.size === 0}
-                    className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-40 transition"
+                    className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/40 transition"
                     title="Hapus"
                   >
                     <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
@@ -371,8 +374,9 @@ export default function PhotoGrid({
           onPrev={handleLightboxPrev}
           onNext={handleLightboxNext}
           onDownload={() => handleSingleDownload(lightboxPhoto)}
-          onDelete={canDelete ? handleSingleDelete : undefined}
-          showUserInfo={showUserInfo}
+          // Cek izin hapus untuk lightbox juga
+          onDelete={canUserDeletePhoto(lightboxPhoto) ? handleSingleDelete : undefined}
+          showUserInfo={true}
         />
       )}
 
