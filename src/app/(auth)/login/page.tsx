@@ -1,7 +1,8 @@
 // ============================================================================
-// LOGIN PAGE - Nomor/Nama + Password
+// LOGIN PAGE - Premium Dark Theme
 // File: src/app/(auth)/login/page.tsx
 // Deskripsi: Login dengan nomor WA atau nama + password
+// Theme senada dengan homepage, compact untuk mobile
 // ============================================================================
 
 'use client'
@@ -9,7 +10,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { login } from '@/actions/auth'
-import { LogIn, Loader2, Eye, EyeOff, User } from 'lucide-react'
+import { Camera, Loader2, Eye, EyeOff, User, Lock, ArrowRight, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 
 export default function LoginPage() {
@@ -26,7 +27,7 @@ export default function LoginPage() {
     setError('')
 
     if (!identifier || !password) {
-      setError('❌ Nomor/Nama dan password harus diisi')
+      setError('Nomor/Nama dan password harus diisi')
       return
     }
 
@@ -45,160 +46,179 @@ export default function LoginPage() {
         setError(result.message)
       }
     } catch (err) {
-      setError('❌ Terjadi kesalahan. Silakan coba lagi.')
+      setError('Terjadi kesalahan. Silakan coba lagi.')
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
-          
-          {/* Logo/Icon */}
-          <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center">
-              <LogIn className="w-8 h-8 text-white" />
+    <div className="min-h-screen bg-[#0a0a0f] text-white flex flex-col">
+      
+      {/* Background Effects */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-30%] left-[-20%] w-[500px] h-[500px] bg-blue-600/15 rounded-full blur-[100px]" />
+        <div className="absolute bottom-[-20%] right-[-20%] w-[400px] h-[400px] bg-indigo-600/15 rounded-full blur-[80px]" />
+        {/* Grid Pattern */}
+        <div 
+          className="absolute inset-0 opacity-[0.02]"
+          style={{
+            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+            backgroundSize: '40px 40px'
+          }}
+        />
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 flex-1 flex flex-col px-5 py-6 max-w-md mx-auto w-full">
+        
+        {/* Header - Compact */}
+        <div className="flex items-center justify-between mb-6">
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
+              <Camera className="w-4 h-4 text-white" strokeWidth={2.5} />
             </div>
-          </div>
+            <span className="text-lg font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+              Lensaptn
+            </span>
+          </Link>
+          <Link 
+            href="/register"
+            className="text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            Daftar
+          </Link>
+        </div>
 
-          {/* Title */}
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              Selamat Datang Kembali
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Login dengan nomor WhatsApp atau nama
-            </p>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Identifier (Nomor WA atau Nama) */}
-            <div>
-              <label 
-                htmlFor="identifier" 
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Nomor WhatsApp atau Nama
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  id="identifier"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="08xx, +62xx, atau nama Anda"
-                  className="w-full px-4 py-3 pl-11 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                  required
-                />
-                <User className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              </div>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Bisa menggunakan nomor WA atau nama lengkap
+        {/* Login Card */}
+        <div className="flex-1 flex flex-col justify-center">
+          <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl">
+            
+            {/* Title - Compact */}
+            <div className="text-center mb-6">
+              <h1 className="text-2xl font-bold text-white mb-1">
+                Selamat Datang
+              </h1>
+              <p className="text-sm text-gray-500">
+                Masuk ke akun Lensaptn kamu
               </p>
             </div>
 
-            {/* Password */}
-            <div>
-              <label 
-                htmlFor="password" 
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
-              >
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  id="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Masukkan password"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition"
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Identifier */}
+              <div className="space-y-1.5">
+                <label htmlFor="identifier" className="block text-xs font-medium text-gray-400">
+                  Nomor WhatsApp / Nama
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="identifier"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    placeholder="08xx atau nama kamu"
+                    className="w-full px-4 py-3 pl-11 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                    required
+                  />
+                  <User className="w-4 h-4 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div className="space-y-1.5">
+                <label htmlFor="password" className="block text-xs font-medium text-gray-400">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    id="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Masukkan password"
+                    className="w-full px-4 py-3 pl-11 pr-11 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+                    required
+                  />
+                  <Lock className="w-4 h-4 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Lupa Password */}
+              <div className="flex justify-end">
+                <Link 
+                  href="/reset-password" 
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
+                  Lupa password?
+                </Link>
               </div>
-            </div>
 
-            {/* Lupa Password Link */}
-            <div className="flex justify-end">
-              <Link 
-                href="/reset-password" 
-                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition"
-              >
-                Lupa password?
-              </Link>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-600 dark:text-red-400">
-                  {error}
-                </p>
-              </div>
-            )}
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-medium py-3 rounded-lg transition flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Memproses...
-                </>
-              ) : (
-                <>
-                  <LogIn className="w-5 h-5" />
-                  Login
-                </>
+              {/* Error Message */}
+              {error && (
+                <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-400">{error}</p>
+                </div>
               )}
-            </button>
-          </form>
 
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="group w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold rounded-xl transition-all active:scale-[0.98]"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Memproses...
+                  </>
+                ) : (
+                  <>
+                    Masuk
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Divider */}
+            <div className="relative my-5">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-white/10"></div>
+              </div>
+              <div className="relative flex justify-center">
+                <span className="px-3 bg-[#0a0a0f]/80 text-xs text-gray-500">
+                  atau
+                </span>
+              </div>
             </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                Belum punya akun?
-              </span>
-            </div>
-          </div>
 
-          {/* Register Link */}
-          <Link
-            href="/register"
-            className="block w-full text-center bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 rounded-lg transition"
-          >
-            Daftar Sekarang
-          </Link>
-
-          {/* Info */}
-          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-              Gunakan nomor WhatsApp atau nama yang terdaftar untuk login
-            </p>
+            {/* Register Link */}
+            <Link
+              href="/register"
+              className="block w-full text-center px-6 py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 font-medium rounded-xl transition-all active:scale-[0.98]"
+            >
+              Buat Akun Baru
+            </Link>
           </div>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
-          dibuat dengan ❤️ oleh Komunitas Kita
-        </p>
+        {/* Footer - Compact */}
+        <div className="mt-6 text-center">
+          <p className="text-xs text-gray-600">
+            &copy; 2026 <span className="text-gray-500">Lensaptn</span> • v0.1-beta
+          </p>
+        </div>
+
       </div>
     </div>
   )

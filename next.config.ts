@@ -52,16 +52,16 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // Redirects
-  async redirects() {
-    return [
-      {
-        source: "/",
-        destination: "/dashboard",
-        permanent: false,
-      },
-    ];
-  },
+  // // Redirects
+  // async redirects() {
+  //   return [
+  //     {
+  //       source: "/",
+  //       destination: "/dashboard",
+  //       permanent: false,
+  //     },
+  //   ];
+  // },
 
   // Ignore errors sementara untuk build
   eslint: {

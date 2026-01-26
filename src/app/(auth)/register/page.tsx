@@ -1,7 +1,8 @@
 // ============================================================================
-// REGISTER PAGE - Interactive Real-time Validation
+// REGISTER PAGE - Premium Dark Theme
 // File: src/app/(auth)/register/page.tsx
-// Deskripsi: Halaman registrasi dengan validasi password real-time & UX interaktif
+// Deskripsi: Halaman registrasi dengan validasi real-time, tema senada homepage
+// Compact untuk mobile Android
 // ============================================================================
 
 'use client'
@@ -11,17 +12,17 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { sendOTP } from '@/actions/auth'
 import { 
-  UserPlus, 
+  Camera,
   Loader2, 
   Eye, 
   EyeOff, 
-  Send, 
   CheckCircle2, 
   User, 
   Phone, 
   Lock, 
   XCircle, 
-  ArrowRight
+  ArrowRight,
+  AlertCircle
 } from 'lucide-react'
 
 export default function RegisterPage() {
@@ -40,24 +41,54 @@ export default function RegisterPage() {
     confirmPassword: ''
   })
 
-  // Validasi Visual (null = belum isi, true = valid, false = invalid)
+  // Validasi Visual
   const [passMatch, setPassMatch] = useState<boolean | null>(null)
+  const [passLength, setPassLength] = useState<boolean | null>(null)
+  const [nameValid, setNameValid] = useState<boolean | null>(null)
+  const [phoneValid, setPhoneValid] = useState<boolean | null>(null)
   const [error, setError] = useState('')
 
   // ================= REAL-TIME VALIDATION =================
   useEffect(() => {
-    // Cek kesamaan password secara real-time
+    // Validasi nama (minimal 3 karakter)
+    if (formData.fullName) {
+      setNameValid(formData.fullName.trim().length >= 3)
+    } else {
+      setNameValid(null)
+    }
+  }, [formData.fullName])
+
+  useEffect(() => {
+    // Validasi nomor telepon (minimal 10 digit, hanya angka)
+    if (formData.phoneNumber) {
+      const phoneRegex = /^[0-9+]{10,15}$/
+      setPhoneValid(phoneRegex.test(formData.phoneNumber.replace(/\s/g, '')))
+    } else {
+      setPhoneValid(null)
+    }
+  }, [formData.phoneNumber])
+
+  useEffect(() => {
+    // Validasi panjang password (minimal 6 karakter)
+    if (formData.password) {
+      setPassLength(formData.password.length >= 6)
+    } else {
+      setPassLength(null)
+    }
+  }, [formData.password])
+
+  useEffect(() => {
+    // Cek kesamaan password
     if (formData.confirmPassword) {
       setPassMatch(formData.password === formData.confirmPassword)
     } else {
-      setPassMatch(null) // Reset jika kosong
+      setPassMatch(null)
     }
   }, [formData.password, formData.confirmPassword])
 
   // ================= HANDLERS =================
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
-    // Reset error global saat user mengetik
     if (error) setError('')
   }
 
@@ -65,238 +96,343 @@ export default function RegisterPage() {
     e.preventDefault()
     setError('')
 
-    // 1. Validasi Final
+    // Validasi final dengan pesan Indonesia
+    if (!formData.fullName.trim()) {
+      setError('Nama lengkap wajib diisi')
+      return
+    }
     if (formData.fullName.trim().length < 3) {
-      setError('❌ Nama lengkap minimal 3 karakter')
+      setError('Nama lengkap minimal 3 karakter')
+      return
+    }
+    if (!formData.phoneNumber.trim()) {
+      setError('Nomor WhatsApp wajib diisi')
+      return
+    }
+    if (!phoneValid) {
+      setError('Format nomor WhatsApp tidak valid')
+      return
+    }
+    if (!formData.password) {
+      setError('Password wajib diisi')
       return
     }
     if (formData.password.length < 6) {
-      setError('❌ Password minimal 6 karakter')
+      setError('Password minimal 6 karakter')
+      return
+    }
+    if (!formData.confirmPassword) {
+      setError('Konfirmasi password wajib diisi')
       return
     }
     if (formData.password !== formData.confirmPassword) {
-      setError('❌ Password tidak cocok!')
+      setError('Password dan konfirmasi tidak cocok')
       return
     }
 
     setIsLoading(true)
 
     try {
-      // 2. Simpan Data Sementara (Untuk Step OTP nanti)
       sessionStorage.setItem('temp_register_data', JSON.stringify({
         fullName: formData.fullName,
         phoneNumber: formData.phoneNumber,
         password: formData.password
       }))
 
-      // 3. Kirim OTP
       const result = await sendOTP(formData.phoneNumber, 'registration')
 
       if (result.success) {
-        // Redirect ke halaman Verify OTP dengan membawa nomor HP di URL
         const encodedPhone = encodeURIComponent(formData.phoneNumber)
         router.push(`/verify-otp?phone=${encodedPhone}&type=registration`)
       } else {
-        setError(result.message)
+        // Terjemahkan error dari server jika perlu
+        const errorMsg = result.message
+          .replace('Format nomor tidak valid', 'Format nomor WhatsApp tidak valid')
+          .replace('already registered', 'sudah terdaftar')
+          .replace('Invalid', 'Tidak valid')
+          .replace('Error', 'Kesalahan')
+        setError(errorMsg)
       }
     } catch (err) {
       console.error(err)
-      setError('❌ Terjadi kesalahan sistem. Coba lagi nanti.')
+      setError('Terjadi kesalahan sistem. Silakan coba lagi nanti.')
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-white/20">
-          
-          {/* ================= HEADER (LOGO & JUDUL) ================= */}
-          <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-              <UserPlus className="w-8 h-8 text-white" />
+    <div className="min-h-screen bg-[#0a0a0f] text-white flex flex-col">
+      
+      {/* Background Effects */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-[-20%] right-[-20%] w-[500px] h-[500px] bg-indigo-600/15 rounded-full blur-[100px]" />
+        <div className="absolute bottom-[-30%] left-[-20%] w-[400px] h-[400px] bg-blue-600/15 rounded-full blur-[80px]" />
+        {/* Grid Pattern */}
+        <div 
+          className="absolute inset-0 opacity-[0.02]"
+          style={{
+            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+            backgroundSize: '40px 40px'
+          }}
+        />
+      </div>
+
+      {/* Content */}
+      <div className="relative z-10 flex-1 flex flex-col px-5 py-6 max-w-md mx-auto w-full">
+        
+        {/* Header - Compact */}
+        <div className="flex items-center justify-between mb-4">
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
+              <Camera className="w-4 h-4 text-white" strokeWidth={2.5} />
             </div>
-          </div>
-
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              Daftar Akun Baru
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Isi data diri Anda untuk bergabung
-            </p>
-          </div>
-
-          {/* ================= FORM REGISTRASI ================= */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            
-            {/* 1. Nama Lengkap */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1.5 ml-1">
-                Nama Lengkap
-              </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-500 transition-colors">
-                  <User className="h-5 w-5" />
-                </div>
-                <input
-                  type="text"
-                  name="fullName"
-                  value={formData.fullName}
-                  onChange={handleChange}
-                  placeholder="Contoh: Ahink Ganteng"
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-xl leading-5 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* 2. Nomor WhatsApp */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1.5 ml-1">
-                Nomor WhatsApp
-              </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-500 transition-colors">
-                  <Phone className="h-5 w-5" />
-                </div>
-                <input
-                  type="tel"
-                  name="phoneNumber"
-                  value={formData.phoneNumber}
-                  onChange={handleChange}
-                  placeholder="08xxxxxxxxxx"
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 rounded-xl leading-5 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* 3. Password */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1.5 ml-1">
-                Password
-              </label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-500 transition-colors">
-                  <Lock className="h-5 w-5" />
-                </div>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="Minimal 6 karakter"
-                  className="block w-full pl-10 pr-10 py-3 border border-gray-300 dark:border-gray-600 rounded-xl leading-5 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
-                  required
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-                >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </div>
-            </div>
-
-            {/* 4. Konfirmasi Password (INTERAKTIF) */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1.5 ml-1">
-                Ulangi Password
-              </label>
-              <div className="relative">
-                {/* Ikon Validasi Kiri (Berubah Warna) */}
-                <div className={`absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none transition-colors ${
-                  passMatch === false ? 'text-red-500' : 
-                  passMatch === true ? 'text-green-500' : 
-                  'text-gray-400'
-                }`}>
-                  {passMatch === true ? <CheckCircle2 className="h-5 w-5" /> : 
-                   passMatch === false ? <XCircle className="h-5 w-5" /> : 
-                   <Lock className="h-5 w-5" />}
-                </div>
-                
-                <input
-                  type={showConfirm ? 'text' : 'password'}
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  placeholder="Ketik ulang password"
-                  className={`block w-full pl-10 pr-10 py-3 border rounded-xl leading-5 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 transition-all ${
-                    passMatch === false 
-                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' 
-                      : passMatch === true 
-                      ? 'border-green-500 focus:border-green-500 focus:ring-green-500/20'
-                      : 'border-gray-300 dark:border-gray-600 focus:border-blue-500 focus:ring-blue-500/50'
-                  }`}
-                  required
-                />
-                
-                <button
-                  type="button"
-                  onClick={() => setShowConfirm(!showConfirm)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-                >
-                  {showConfirm ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              </div>
-              
-              {/* Feedback Text di Bawah Input */}
-              {passMatch === false && (
-                <p className="text-xs text-red-500 mt-1 ml-1 font-medium animate-pulse flex items-center gap-1">
-                  <XCircle className="w-3 h-3" /> Password tidak cocok!
-                </p>
-              )}
-              {passMatch === true && (
-                <p className="text-xs text-green-600 mt-1 ml-1 font-medium flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> Password cocok.
-                </p>
-              )}
-            </div>
-
-            {/* Error Message Global */}
-            {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl animate-in fade-in slide-in-from-top-2">
-                <p className="text-sm text-red-600 dark:text-red-400 text-center font-medium">
-                  {error}
-                </p>
-              </div>
-            )}
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading || passMatch === false}
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-500/30 transform transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:transform-none mt-4"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Memproses...</span>
-                </>
-              ) : (
-                <>
-                  <span>Kirim Kode OTP</span>
-                  <ArrowRight className="w-5 h-5" />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* ================= FOOTER ================= */}
-          <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700 text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Sudah punya akun?{' '}
-              <Link href="/login" className="font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors">
-                Login disini
-              </Link>
-            </p>
-          </div>
-
+            <span className="text-lg font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+              Lensaptn
+            </span>
+          </Link>
+          <Link 
+            href="/login"
+            className="text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            Masuk
+          </Link>
         </div>
+
+        {/* Register Card */}
+        <div className="flex-1 flex flex-col justify-center">
+          <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl border border-white/10 rounded-3xl p-5 sm:p-6 shadow-2xl">
+            
+            {/* Title - Compact */}
+            <div className="text-center mb-5">
+              <h1 className="text-xl sm:text-2xl font-bold text-white mb-1">
+                Buat Akun Baru
+              </h1>
+              <p className="text-xs sm:text-sm text-gray-500">
+                Isi data diri untuk bergabung di Lensaptn
+              </p>
+            </div>
+
+            {/* Form - noValidate untuk disable browser validation */}
+            <form onSubmit={handleSubmit} noValidate className="space-y-3.5">
+              
+              {/* Nama Lengkap */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-400 ml-1">
+                  Nama Lengkap
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="fullName"
+                    value={formData.fullName}
+                    onChange={handleChange}
+                    placeholder="Contoh: Budi Santoso"
+                    className={`w-full px-4 py-2.5 pl-10 bg-white/5 border rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
+                      nameValid === false 
+                        ? 'border-red-500/50 focus:border-red-500/50 focus:ring-red-500/30' 
+                        : nameValid === true 
+                        ? 'border-green-500/50 focus:border-green-500/50 focus:ring-green-500/30'
+                        : 'border-white/10 focus:border-blue-500/50 focus:ring-blue-500/50'
+                    }`}
+                  />
+                  <div className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${
+                    nameValid === false ? 'text-red-400' : 
+                    nameValid === true ? 'text-green-400' : 
+                    'text-gray-500'
+                  }`}>
+                    {nameValid === true ? <CheckCircle2 className="w-4 h-4" /> : 
+                     nameValid === false ? <XCircle className="w-4 h-4" /> : 
+                     <User className="w-4 h-4" />}
+                  </div>
+                </div>
+                {nameValid === false && (
+                  <p className="text-[11px] text-red-400 ml-1 flex items-center gap-1">
+                    <XCircle className="w-3 h-3" /> Minimal 3 karakter
+                  </p>
+                )}
+              </div>
+
+              {/* Nomor WhatsApp */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-400 ml-1">
+                  Nomor WhatsApp
+                </label>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    name="phoneNumber"
+                    value={formData.phoneNumber}
+                    onChange={handleChange}
+                    placeholder="08xxxxxxxxxx"
+                    className={`w-full px-4 py-2.5 pl-10 bg-white/5 border rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
+                      phoneValid === false 
+                        ? 'border-red-500/50 focus:border-red-500/50 focus:ring-red-500/30' 
+                        : phoneValid === true 
+                        ? 'border-green-500/50 focus:border-green-500/50 focus:ring-green-500/30'
+                        : 'border-white/10 focus:border-blue-500/50 focus:ring-blue-500/50'
+                    }`}
+                  />
+                  <div className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${
+                    phoneValid === false ? 'text-red-400' : 
+                    phoneValid === true ? 'text-green-400' : 
+                    'text-gray-500'
+                  }`}>
+                    {phoneValid === true ? <CheckCircle2 className="w-4 h-4" /> : 
+                     phoneValid === false ? <XCircle className="w-4 h-4" /> : 
+                     <Phone className="w-4 h-4" />}
+                  </div>
+                </div>
+                {phoneValid === false && (
+                  <p className="text-[11px] text-red-400 ml-1 flex items-center gap-1">
+                    <XCircle className="w-3 h-3" /> Format nomor tidak valid
+                  </p>
+                )}
+              </div>
+
+              {/* Password */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-400 ml-1">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="Minimal 6 karakter"
+                    className={`w-full px-4 py-2.5 pl-10 pr-10 bg-white/5 border rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
+                      passLength === false 
+                        ? 'border-red-500/50 focus:border-red-500/50 focus:ring-red-500/30' 
+                        : passLength === true 
+                        ? 'border-green-500/50 focus:border-green-500/50 focus:ring-green-500/30'
+                        : 'border-white/10 focus:border-blue-500/50 focus:ring-blue-500/50'
+                    }`}
+                  />
+                  <div className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${
+                    passLength === false ? 'text-red-400' : 
+                    passLength === true ? 'text-green-400' : 
+                    'text-gray-500'
+                  }`}>
+                    {passLength === true ? <CheckCircle2 className="w-4 h-4" /> : 
+                     passLength === false ? <XCircle className="w-4 h-4" /> : 
+                     <Lock className="w-4 h-4" />}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {passLength === false && (
+                  <p className="text-[11px] text-red-400 ml-1 flex items-center gap-1">
+                    <XCircle className="w-3 h-3" /> Minimal 6 karakter
+                  </p>
+                )}
+              </div>
+
+              {/* Konfirmasi Password */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-400 ml-1">
+                  Ulangi Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirm ? 'text' : 'password'}
+                    name="confirmPassword"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    placeholder="Ketik ulang password"
+                    className={`w-full px-4 py-2.5 pl-10 pr-10 bg-white/5 border rounded-xl text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 transition-all ${
+                      passMatch === false 
+                        ? 'border-red-500/50 focus:border-red-500/50 focus:ring-red-500/30' 
+                        : passMatch === true 
+                        ? 'border-green-500/50 focus:border-green-500/50 focus:ring-green-500/30'
+                        : 'border-white/10 focus:border-blue-500/50 focus:ring-blue-500/50'
+                    }`}
+                  />
+                  <div className={`absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${
+                    passMatch === false ? 'text-red-400' : 
+                    passMatch === true ? 'text-green-400' : 
+                    'text-gray-500'
+                  }`}>
+                    {passMatch === true ? <CheckCircle2 className="w-4 h-4" /> : 
+                     passMatch === false ? <XCircle className="w-4 h-4" /> : 
+                     <Lock className="w-4 h-4" />}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                
+                {/* Feedback Text */}
+                {passMatch === false && (
+                  <p className="text-[11px] text-red-400 ml-1 flex items-center gap-1">
+                    <XCircle className="w-3 h-3" /> Password tidak cocok
+                  </p>
+                )}
+                {passMatch === true && (
+                  <p className="text-[11px] text-green-400 ml-1 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Password cocok
+                  </p>
+                )}
+              </div>
+
+              {/* Error Message */}
+              {error && (
+                <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-400">{error}</p>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isLoading || passMatch === false || passLength === false || nameValid === false || phoneValid === false}
+                className="group w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all active:scale-[0.98] mt-2"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Memproses...
+                  </>
+                ) : (
+                  <>
+                    Kirim Kode OTP
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Footer Link */}
+            <div className="mt-5 pt-4 border-t border-white/10 text-center">
+              <p className="text-sm text-gray-500">
+                Sudah punya akun?{' '}
+                <Link href="/login" className="font-semibold text-blue-400 hover:text-blue-300 transition-colors">
+                  Masuk disini
+                </Link>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer - Compact */}
+        <div className="mt-4 text-center">
+          <p className="text-xs text-gray-600">
+            &copy; 2026 <span className="text-gray-500">Lensaptn</span> • v0.1-beta
+          </p>
+        </div>
+
       </div>
     </div>
   )
