@@ -197,7 +197,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-4">
-          Blueprint 2.0 - Professional Edition
+          dibuat dengan ❤️ oleh Komunitas Kita
         </p>
       </div>
     </div>
