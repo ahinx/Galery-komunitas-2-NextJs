@@ -9,17 +9,20 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 // ============================================================================
-// ENVIRONMENT VARIABLES VALIDATION
+// ENVIRONMENT VARIABLES (dengan fallback untuk build time)
 // ============================================================================
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
-if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-        'Missing Supabase environment variables. ' +
-        'Pastikan NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY sudah diset di .env.local'
-    )
+// Helper untuk validasi saat runtime (bukan build time)
+function validateEnvVars() {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        throw new Error(
+            'Missing Supabase environment variables. ' +
+            'Pastikan NEXT_PUBLIC_SUPABASE_URL dan NEXT_PUBLIC_SUPABASE_ANON_KEY sudah diset.'
+        )
+    }
 }
 
 // ============================================================================
@@ -27,7 +30,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // ============================================================================
 
 export function createClient() {
-    return createBrowserClient(supabaseUrl, supabaseAnonKey)
+    validateEnvVars()
+    return createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
 }
 
 // ============================================================================
@@ -35,30 +42,52 @@ export function createClient() {
 // ============================================================================
 
 export async function createServerSupabaseClient() {
+    validateEnvVars()
     const cookieStore = await cookies()
 
-    return createServerClient(supabaseUrl, supabaseAnonKey, {
-        cookies: {
-            get(name: string) {
-                return cookieStore.get(name)?.value
+    return createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            cookies: {
+                get(name: string) {
+                    return cookieStore.get(name)?.value
+                },
+                set(name: string, value: string, options: CookieOptions) {
+                    try {
+                        cookieStore.set({ name, value, ...options })
+                    } catch (error) {
+                        // Cookie sudah di-set di middleware atau SSR
+                        // Error ini bisa diabaikan
+                    }
+                },
+                remove(name: string, options: CookieOptions) {
+                    try {
+                        cookieStore.set({ name, value: '', ...options })
+                    } catch (error) {
+                        // Error ini bisa diabaikan
+                    }
+                },
             },
-            set(name: string, value: string, options: CookieOptions) {
-                try {
-                    cookieStore.set({ name, value, ...options })
-                } catch (error) {
-                    // Cookie sudah di-set di middleware atau SSR
-                    // Error ini bisa diabaikan
-                }
-            },
-            remove(name: string, options: CookieOptions) {
-                try {
-                    cookieStore.set({ name, value: '', ...options })
-                } catch (error) {
-                    // Error ini bisa diabaikan
-                }
-            },
-        },
-    })
+        }
+    )
+}
+
+// ============================================================================
+// SERVICE ROLE CLIENT (untuk Admin operations)
+// ============================================================================
+
+export async function createServiceRoleClient() {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        throw new Error('Missing Supabase service role environment variables.')
+    }
+
+    const { createClient } = await import('@supabase/supabase-js')
+    return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+        { auth: { persistSession: false } }
+    )
 }
 
 // ============================================================================
@@ -197,14 +226,4 @@ export interface OtpCode {
     created_at: string
     used_at: string | null
     attempt_count: number
-}
-
-// ============================================================================
-export async function createServiceRoleClient() {
-    const { createClient } = await import('@supabase/supabase-js')
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!, // Bukan anon key!
-        { auth: { persistSession: false } }
-    )
 }
