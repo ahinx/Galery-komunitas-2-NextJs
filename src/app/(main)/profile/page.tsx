@@ -24,6 +24,16 @@ export default async function ProfilePage() {
         <ProfileForm user={user} />
         
       </div>
+
+         {/* Footer User */}
+         <div className="mt-6 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Pastikan data profil Anda selalu diperbarui untuk pengalaman terbaik.
+          </p>
+        </div>
+
     </div>
+
+    
   )
 }
