@@ -591,30 +591,90 @@ export async function checkAuthStatus() {
 }
 
 // ============================================================================
-// ACTION: CHECK REGISTRATION STATUS (Khusus Waiting Room)
+// ACTION: CHECK REGISTRATION STATUS (untuk Waiting Room)
 // ============================================================================
 
-export async function checkRegistrationStatus() {
+export async function checkRegistrationStatus(userId?: string): Promise<{
+    success: boolean
+    status: 'pending' | 'approved' | 'rejected' | 'not_found'
+    message: string
+    user?: {
+        id: string
+        full_name: string
+        is_approved: boolean
+        is_verified: boolean
+    }
+}> {
+    debugLog('🚀 ACTION: checkRegistrationStatus', { userId })
+
     try {
-        const user = await getCurrentUser()
+        const cookieStore = await cookies()
+        const currentUserId = userId || cookieStore.get('user_id')?.value
 
-        // 1. Jika user tidak ditemukan (padahal punya cookie session)
-        // Artinya admin telah menghapus/menolak akun ini dari database
-        if (!user) {
-            return { status: 'rejected' }
+        if (!currentUserId) {
+            return {
+                success: false,
+                status: 'not_found',
+                message: 'User tidak ditemukan. Silakan login kembali.',
+            }
         }
 
-        // 2. Jika kolom is_approved bernilai true
-        if (user.is_approved) {
-            return { status: 'approved' }
+        const supabase = getAdminClient()
+
+        const { data: user, error } = await supabase
+            .from('profiles')
+            .select('id, full_name, is_approved, is_verified, role')
+            .eq('id', currentUserId)
+            .single()
+
+        if (error || !user) {
+            debugLog('❌ User Not Found', { error: error?.message })
+            return {
+                success: false,
+                status: 'not_found',
+                message: 'User tidak ditemukan.',
+            }
         }
 
-        // 3. Default: User ada tapi belum diapprove
-        return { status: 'pending' }
+        debugLog('User Status', {
+            id: user.id,
+            is_approved: user.is_approved,
+            is_verified: user.is_verified
+        })
 
-    } catch (error) {
-        console.error('❌ Error checking registration status:', error)
-        // Jika error sistem, anggap pending dulu agar tidak auto-logout
-        return { status: 'pending' }
+        // Tentukan status
+        let status: 'pending' | 'approved' | 'rejected' = 'pending'
+        let message = ''
+
+        if (user.is_approved === true) {
+            status = 'approved'
+            message = '✅ Akun Anda telah disetujui! Anda dapat mengakses semua fitur.'
+        } else if (user.is_approved === false && user.is_verified) {
+            // User sudah verifikasi tapi belum di-approve
+            status = 'pending'
+            message = '⏳ Akun Anda sedang menunggu persetujuan admin.'
+        } else {
+            status = 'pending'
+            message = '⏳ Akun Anda sedang dalam proses verifikasi.'
+        }
+
+        return {
+            success: true,
+            status,
+            message,
+            user: {
+                id: user.id,
+                full_name: user.full_name,
+                is_approved: user.is_approved,
+                is_verified: user.is_verified,
+            },
+        }
+    } catch (error: any) {
+        console.error('❌ Error in checkRegistrationStatus:', error)
+        return {
+            success: false,
+            status: 'not_found',
+            message: `❌ Terjadi kesalahan: ${error.message}`,
+        }
     }
 }
