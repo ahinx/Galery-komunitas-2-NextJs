@@ -9,6 +9,9 @@ import { getCurrentUser } from '@/actions/auth'
 import DropZone from '@/components/upload/DropZone'
 import { Upload as UploadIcon } from 'lucide-react'
 
+// TAMBAHKAN BARIS INI
+export const dynamic = 'force-dynamic'
+
 export default async function UploadPage() {
   const user = await getCurrentUser()
 
@@ -35,27 +38,7 @@ export default async function UploadPage() {
               Upload Foto
             </h1>
           </div>
-          {/* <p className="text-gray-600 dark:text-gray-400">
-            Upload foto Anda ke galeri komunitas. File akan dikompresi otomatis.
-          </p> */}
         </div>
-
-        {/* Info Banner */}
-        {/* <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 text-blue-600 dark:text-blue-400 mt-0.5">
-              ℹ️
-            </div>
-            <div className="text-sm text-blue-900 dark:text-blue-100 space-y-1">
-              <p className="font-medium">Tips Upload:</p>
-              <ul className="list-disc list-inside space-y-1 text-blue-800 dark:text-blue-200">
-                <li>File akan dikompresi otomatis menjadi format WebP untuk menghemat ruang</li>
-                <li>Metadata EXIF (lokasi, kamera, tanggal) akan disimpan untuk keamanan</li>
-                <li>Upload bisa dilakukan secara batch (multiple files sekaligus)</li>
-              </ul>
-            </div>
-          </div>
-        </div> */}
 
         {/* Upload Component */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">

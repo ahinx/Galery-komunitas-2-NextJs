@@ -7,6 +7,9 @@ import { getCurrentUser } from '@/actions/auth'
 import { redirect } from 'next/navigation'
 import ProfileForm from '@/components/profile/ProfileForm'
 
+// TAMBAHKAN BARIS INI (Wajib untuk halaman yang baca cookie user)
+export const dynamic = 'force-dynamic'
+
 export default async function ProfilePage() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
@@ -33,7 +36,5 @@ export default async function ProfilePage() {
         </div>
 
     </div>
-
-    
   )
 }
