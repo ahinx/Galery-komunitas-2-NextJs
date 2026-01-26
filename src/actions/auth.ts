@@ -589,3 +589,32 @@ export async function checkAuthStatus() {
         user,
     }
 }
+
+// ============================================================================
+// ACTION: CHECK REGISTRATION STATUS (Khusus Waiting Room)
+// ============================================================================
+
+export async function checkRegistrationStatus() {
+    try {
+        const user = await getCurrentUser()
+
+        // 1. Jika user tidak ditemukan (padahal punya cookie session)
+        // Artinya admin telah menghapus/menolak akun ini dari database
+        if (!user) {
+            return { status: 'rejected' }
+        }
+
+        // 2. Jika kolom is_approved bernilai true
+        if (user.is_approved) {
+            return { status: 'approved' }
+        }
+
+        // 3. Default: User ada tapi belum diapprove
+        return { status: 'pending' }
+
+    } catch (error) {
+        console.error('❌ Error checking registration status:', error)
+        // Jika error sistem, anggap pending dulu agar tidak auto-logout
+        return { status: 'pending' }
+    }
+}
