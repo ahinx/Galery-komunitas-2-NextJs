@@ -62,7 +62,7 @@ export default function Navbar({ user }: NavbarProps) {
               font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-300 tracking-tight
               ${isDashboard ? 'hidden md:block' : 'block'}
             `}>
-              GaleriKomunitas
+              Galeri PTN
             </span>
           </Link>
 
