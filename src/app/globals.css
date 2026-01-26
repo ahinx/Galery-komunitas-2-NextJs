@@ -1,21 +1,6 @@
-@import "tailwindcss";
-
-/* Di Tailwind v4, kita mendefinisikan variabel tema 
-   langsung di dalam blok @theme 
-*/
-@theme {
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-
-  /* Animasi Skeleton */
-  @keyframes skeleton {
-    0% {
-      background-position: -200% 0;
-    }
-    100% {
-      background-position: 200% 0;
-    }
-  }
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* ============================================================================
    BASE STYLES
@@ -27,7 +12,11 @@
 
   body {
     @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-white;
-    font-family: var(--font-sans);
+    font-family:
+      "Inter",
+      system-ui,
+      -apple-system,
+      sans-serif;
   }
 
   html {
@@ -66,6 +55,7 @@
   .btn-primary {
     @apply bg-blue-600 hover:bg-blue-700 text-white;
   }
+
   .btn-secondary {
     @apply bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white;
   }
@@ -103,5 +93,15 @@
 
   .dark .skeleton {
     background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+  }
+}
+
+/* Animasi Skeleton */
+@keyframes skeleton {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
   }
 }
