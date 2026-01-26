@@ -2,7 +2,7 @@
 import type { OpenNextConfig } from "@opennextjs/cloudflare";
 
 const config: OpenNextConfig = {
-    // Cloudflare Pages configuration
+    default: {},
 };
 
 export default config;
