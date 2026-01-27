@@ -172,7 +172,7 @@ export default function LandingPageClient({ branding }: { branding: BrandingProp
     // Delay 2 detik sebelum tampilkan modal
     const timer = setTimeout(() => {
       setShowDisclaimer(true)
-    }, 2000)
+    }, 3000)
 
     return () => clearTimeout(timer)
   }, [])
@@ -408,7 +408,7 @@ export default function LandingPageClient({ branding }: { branding: BrandingProp
                 Kenapa <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">{appName}</span>?
               </h2>
               <p className="text-gray-500 max-w-2xl mx-auto">
-                Didesain khusus untuk kebutuhan berbagi kenangan dengan fitur-fitur unggulan
+               Satu kamera saja tidak cukup menceritakan segalanya. disini, setiap lensa anggota punya peran. Satukan ribuan sudut pandang dari berbagai kamera menjadi satu galeri utuh, agar tidak ada momen berharga yang terlewat dalam setiap pengabdian kita.
               </p>
             </div>
 
@@ -450,68 +450,71 @@ export default function LandingPageClient({ branding }: { branding: BrandingProp
           </div>
         </section>
 
-        {/* Disclaimer Section */}
         <section className="px-6 py-12">
-          <div className="max-w-3xl mx-auto">
-            <div className="relative p-6 sm:p-8 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-3xl overflow-hidden">
-              {/* Background Glow */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/20 rounded-full blur-3xl" />
-              
-              <div className="relative flex gap-4 sm:gap-6">
-                <div className="shrink-0">
-                  <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
-                    <AlertTriangle className="w-6 h-6 text-amber-400" />
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <h3 className="font-bold text-amber-300 uppercase tracking-wider text-sm">
-                    Disclaimer Inisiator
-                  </h3>
-                  <div className="space-y-3 text-amber-200/80 leading-relaxed">
-                    <p>
-                      Website ini adalah <strong className="text-amber-100">proyek percontohan (Pilot Project)</strong> yang 
-                      dibuat secara pribadi untuk mendemonstrasikan sistem galeri komunitas. 
-                      Belum ada kesepakatan resmi dari pengurus. Mohon gunakan dengan bijak.
-                    </p>
-                    <p>
-                      <strong className="text-amber-100">⚠️ Batasan:</strong> Ruang penyimpanan saat ini hanya <strong className="text-amber-100">5 GB</strong> dan 
-                      digunakan untuk keperluan demonstrasi saja. Layanan dapat berubah atau dihentikan sewaktu-waktu tanpa pemberitahuan.
-                    </p>
-                  </div>
-                  
-                  {/* Creator Info */}
-                  <div className="pt-6 mt-6 border-t border-amber-500/20">
-                    <div className="flex flex-col items-center justify-center text-center">
-                      
-                      {/* Nama */}
-                      <p className="text-sm text-amber-300/70">
-                        Dibuat oleh: <strong className="text-amber-200">Ahinxkritinx</strong>
-                      </p>
-                      
-                      {/* Role */}
-                      <p className="text-xs text-amber-400/50 mt-1 mb-3">
-                        Inisiator &amp; Developer
-                      </p>
+      <div className="max-w-3xl mx-auto">
+        <div className="relative p-6 sm:p-8 bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-3xl overflow-hidden">
+          
+          {/* Background Glow */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/20 rounded-full blur-3xl" />
 
-                      {/* Tanggal (Badge Style Centered) */}
-                      <div className="inline-flex items-center gap-2 bg-amber-950/30 px-3 py-1.5 rounded-lg border border-amber-500/10">
-                        <span className="text-[10px] uppercase tracking-wider text-amber-500/40 font-semibold">
-                        Waktu Pengerjaan
-                        </span>
-                        {/* Divider Kecil di dalam badge */}
-                        <div className="w-px h-3 bg-amber-500/20" />
-                        <span className="text-xs font-mono text-amber-300/60">
-                          23 Jan '26 - Sekarang
-                        </span>
-                      </div>
+          {/* === CONTENT SECTION === */}
+          <div className="relative flex gap-4 sm:gap-6">
+            {/* Icon */}
+            <div className="shrink-0">
+              <div className="w-12 h-12 bg-amber-500/20 rounded-xl flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-amber-400" />
+              </div>
+            </div>
 
-                    </div>
-                  </div>
-                </div>
+            {/* Text Content */}
+            <div className="space-y-4">
+              <h3 className="font-bold text-amber-300 uppercase tracking-wider text-sm">
+                Disclaimer Inisiator
+              </h3>
+              <div className="space-y-3 text-amber-200/80 leading-relaxed text-sm sm:text-base">
+                <p>
+                  Website ini adalah <strong className="text-amber-100">proyek percontohan (Pilot Project)</strong> yang
+                  dibuat secara pribadi untuk mendemonstrasikan sistem galeri komunitas.
+                  Belum ada kesepakatan resmi dari pengurus. Mohon gunakan dengan bijak.
+                </p>
+                <p>
+                  <strong className="text-amber-100">⚠️ Batasan:</strong> Ruang penyimpanan saat ini hanya <strong className="text-amber-100">5 GB</strong> dan
+                  digunakan untuk keperluan demonstrasi saja. Layanan dapat berubah atau dihentikan sewaktu-waktu dan akan di infokan di WA terdaftar.
+                </p>
               </div>
             </div>
           </div>
-        </section>
+
+          {/* === FOOTER / CREATOR INFO === */}
+          <div className="mt-8 pt-6 border-t border-amber-500/20">
+            <div className="flex flex-col items-center justify-center text-center">
+              
+              {/* Nama */}
+              <p className="text-sm text-amber-300/70">
+                Dibuat oleh: <strong className="text-amber-200">Ahinxkritinx</strong>
+              </p>
+
+              {/* Role */}
+              <p className="text-xs text-amber-400/50 mt-1 mb-4">
+                Inisiator & Developer
+              </p>
+
+              {/* Tanggal (Vertical Stacked Badge) */}
+              <div className="inline-flex flex-col items-center justify-center bg-amber-950/30 px-4 py-2 rounded-lg border border-amber-500/10 gap-1">
+                <span className="text-[10px] uppercase tracking-wider text-amber-500/40 font-semibold">
+                  Waktu Pengerjaan
+                </span>
+                <span className="text-xs font-mono text-amber-300/60">
+                  23 Januari 2026 - Sekarang
+                </span>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
 
         {/* CTA Section */}
         <section className="px-6 py-20">

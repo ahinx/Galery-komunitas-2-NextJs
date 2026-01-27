@@ -1,95 +1,145 @@
-'use client'
+// ============================================================================
+// WAITING ROOM PAGE (Dynamic App Name)
+// File: src/app/(auth)/waiting-room/page.tsx
+// ============================================================================
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { checkRegistrationStatus, logout } from '@/actions/auth'
-import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { getCurrentUser, getAdminContacts } from '@/actions/auth'
+import { getAppSettings } from '@/actions/settings' // <--- IMPORT BARU
+import { redirect } from 'next/navigation'
+import LogoutButton from '@/components/auth/LogoutButton'
+import { MessageCircle, User, AlertCircle, Loader2 } from 'lucide-react'
+import Image from 'next/image'
 
-export default function WaitingRoomPage() {
-  const router = useRouter()
-  const [status, setStatus] = useState<'pending' | 'approved' | 'rejected'>('pending')
-  const [isChecking, setIsChecking] = useState(true)
+// Helper: Format HP ke format WA
+const formatPhoneForWA = (phone: string | null) => {
+  if (!phone) return null
+  let p = phone.replace(/\D/g, '')
+  if (p.startsWith('0')) p = '62' + p.slice(1)
+  return p
+}
 
-  // Polling Status setiap 3 detik
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      const result = await checkRegistrationStatus()
-      if (result.status === 'approved') {
-        setStatus('approved')
-        clearInterval(interval)
-        setTimeout(() => router.push('/dashboard'), 2000)
-      } else if (result.status === 'rejected') {
-        setStatus('rejected')
-        clearInterval(interval)
-      }
-    }, 3000)
+export default async function WaitingRoomPage() {
+  // 1. Ambil Data User, Admin, DAN Settings secara paralel
+  const [user, admins, settings] = await Promise.all([
+    getCurrentUser(),
+    getAdminContacts(),
+    getAppSettings() // <--- AMBIL SETTINGS
+  ])
 
-    return () => clearInterval(interval)
-  }, [router])
+  // Security Check
+  if (!user) redirect('/login')
+  
+  if (user.is_approved) redirect('/dashboard')
 
-  const handleLogout = async () => {
-    await logout()
-    router.push('/login')
-  }
+  const isRejected = user.status === 'rejected'
+  
+  // Ambil nama aplikasi (Fallback ke 'Galeri Komunitas' jika belum disetting)
+  const appName = settings?.app_name || 'Galeri Komunitas'
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
-      <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-100 dark:border-gray-700 text-center">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-2xl space-y-6">
         
-        {/* STATUS: PENDING */}
-        {status === 'pending' && (
-          <div className="animate-in fade-in zoom-in duration-300">
-            <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-6 relative">
-              <Clock className="w-10 h-10 text-amber-600 dark:text-amber-400" />
-              <div className="absolute inset-0 border-4 border-amber-500/30 rounded-full animate-ping"></div>
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              Menunggu Persetujuan
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-8">
-              Admin sedang meninjau pendaftaran Anda.<br/>
-              Halaman ini akan otomatis memuat ulang jika sudah disetujui.
-            </p>
-            <button onClick={handleLogout} className="text-sm text-gray-400 hover:text-gray-600 underline">
-              Keluar / Batalkan
-            </button>
-          </div>
-        )}
+        {/* --- STATUS CARD --- */}
+        <div className="bg-white dark:bg-gray-900 p-8 rounded-3xl shadow-lg border border-gray-200 dark:border-gray-800 text-center">
+          
+          <div className="flex flex-col items-center justify-center">
+            
+            {/* ICON STATUS */}
+            {isRejected ? (
+              <div className="w-24 h-24 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-full flex items-center justify-center mb-6">
+                <AlertCircle className="w-12 h-12" />
+              </div>
+            ) : (
+              // -----------------------------------------------------------
+              // ANIMATED ROUND (Pastikan kode animasi Anda sudah dipasang disini)
+              // -----------------------------------------------------------
+              <div className="relative mb-6">
+                 <div className="w-24 h-24 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center animate-pulse">
+                    <div className="w-16 h-16 bg-blue-100 dark:bg-blue-800/40 rounded-full flex items-center justify-center">
+                       <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                    </div>
+                 </div>
+              </div>
+              // -----------------------------------------------------------
+            )}
 
-        {/* STATUS: APPROVED */}
-        {status === 'approved' && (
-          <div className="animate-in fade-in zoom-in duration-300">
-            <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-              <CheckCircle2 className="w-10 h-10 text-green-600 dark:text-green-400" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              Akun Disetujui!
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-8">
-              Selamat datang di komunitas. Mengalihkan ke dashboard...
+            {/* TEXT STATUS */}
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+              {isRejected ? 'Pendaftaran Ditolak' : 'Menunggu Persetujuan'}
+            </h1>
+            
+            <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto leading-relaxed mb-6">
+              {isRejected ? (
+                <>Maaf <span className="font-semibold">{user.full_name}</span>, pendaftaran Anda belum dapat kami setujui saat ini. Silakan hubungi admin untuk info lebih lanjut.</>
+              ) : (
+                <>Halo <span className="font-semibold text-gray-900 dark:text-gray-200">{user.full_name}</span>, akun Anda sedang dalam antrean verifikasi admin. Mohon tunggu sebentar ya.</>
+              )}
             </p>
-            <Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-500" />
-          </div>
-        )}
 
-        {/* STATUS: REJECTED */}
-        {status === 'rejected' && (
-          <div className="animate-in fade-in zoom-in duration-300">
-            <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-              <XCircle className="w-10 h-10 text-red-600 dark:text-red-400" />
+            <div className="w-full flex justify-center border-t border-gray-100 dark:border-gray-800 pt-6">
+              <LogoutButton />
             </div>
-            <h2 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-2">
-              Akses Ditolak
+          </div>
+        </div>
+
+        {/* --- LIST ADMIN --- */}
+        {!isRejected && (
+          <div className="space-y-3 animate-in slide-in-from-bottom-4 duration-500 delay-200">
+            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider text-center">
+              Butuh verifikasi cepat? Hubungi Admin:
             </h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-8">
-              Maaf, admin menolak permohonan pendaftaran Anda.
-            </p>
-            <button 
-              onClick={handleLogout}
-              className="w-full bg-gray-900 hover:bg-gray-800 text-white font-medium py-3 rounded-xl transition"
-            >
-              Keluar Aplikasi
-            </button>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              {admins.map((admin: any) => {
+                const waNumber = formatPhoneForWA(admin.phone)
+                
+                // --- UPDATE PESAN DINAMIS ---
+                const message = encodeURIComponent(
+                  `Halo Admin ${admin.full_name}, saya ${user.full_name} baru mendaftar di ${appName}. Mohon approval akun saya.`
+                )
+                
+                const waLink = waNumber ? `https://wa.me/${waNumber}?text=${message}` : '#'
+
+                return (
+                  <div key={admin.id} className="bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 hover:border-blue-300 transition-all shadow-sm">
+                    {/* Avatar */}
+                    <div className="shrink-0 w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200">
+                      {admin.avatar_url ? (
+                        <Image src={admin.avatar_url} alt={admin.full_name} width={40} height={40} className="w-full h-full object-cover"/>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400"><User className="w-5 h-5"/></div>
+                      )}
+                    </div>
+                    
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{admin.full_name}</p>
+                      <p className="text-[10px] text-gray-500 capitalize">{admin.role.replace('_', ' ')}</p>
+                    </div>
+
+                    {/* Tombol WA */}
+                    {waNumber && (
+                      <a 
+                        href={waLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="p-2 bg-green-50 text-green-600 dark:bg-green-900/20 rounded-lg hover:bg-green-500 hover:text-white transition-colors"
+                        title="Chat WhatsApp"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </a>
+                    )}
+                  </div>
+                )
+              })}
+              
+              {admins.length === 0 && (
+                 <div className="col-span-2 text-center py-4 text-gray-400 text-xs italic">
+                   Belum ada kontak admin yang tersedia.
+                 </div>
+              )}
+            </div>
           </div>
         )}
 
