@@ -246,7 +246,7 @@ function VerifyContent() {
               Pendaftaran Berhasil!
             </h2>
             <p className="text-gray-500 dark:text-gray-400 mb-8">
-              Akun Anda telah aktif. Silakan login untuk mulai menjelajah galeri.
+              Akun Anda telah aktif namun belum di verifikasi. Silakan login untuk cek status dan mulai menjelajah galeri.
             </p>
 
             <button

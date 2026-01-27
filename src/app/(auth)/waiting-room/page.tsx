@@ -1,12 +1,12 @@
 // ============================================================================
-// WAITING ROOM PAGE (Dynamic App Name)
+// WAITING ROOM PAGE (With Check Status Button)
 // File: src/app/(auth)/waiting-room/page.tsx
 // ============================================================================
 
 import { getCurrentUser, getAdminContacts } from '@/actions/auth'
-import { getAppSettings } from '@/actions/settings' // <--- IMPORT BARU
+import { getAppSettings } from '@/actions/settings'
 import { redirect } from 'next/navigation'
-import LogoutButton from '@/components/auth/LogoutButton'
+import CheckStatusButton from '@/components/auth/CheckStatusButton' // <--- IMPORT BARU
 import { MessageCircle, User, AlertCircle, Loader2 } from 'lucide-react'
 import Image from 'next/image'
 
@@ -19,21 +19,21 @@ const formatPhoneForWA = (phone: string | null) => {
 }
 
 export default async function WaitingRoomPage() {
-  // 1. Ambil Data User, Admin, DAN Settings secara paralel
+  // 1. Ambil Data User, Admin, DAN Settings
   const [user, admins, settings] = await Promise.all([
     getCurrentUser(),
     getAdminContacts(),
-    getAppSettings() // <--- AMBIL SETTINGS
+    getAppSettings()
   ])
 
   // Security Check
   if (!user) redirect('/login')
   
+  // LOGIC REDIRECT: Jika status berubah jadi approved saat refresh, 
+  // baris ini akan langsung melempar user ke dashboard.
   if (user.is_approved) redirect('/dashboard')
 
   const isRejected = user.status === 'rejected'
-  
-  // Ambil nama aplikasi (Fallback ke 'Galeri Komunitas' jika belum disetting)
   const appName = settings?.app_name || 'Galeri Komunitas'
 
   return (
@@ -51,9 +51,7 @@ export default async function WaitingRoomPage() {
                 <AlertCircle className="w-12 h-12" />
               </div>
             ) : (
-              // -----------------------------------------------------------
-              // ANIMATED ROUND (Pastikan kode animasi Anda sudah dipasang disini)
-              // -----------------------------------------------------------
+              // ANIMATED ROUND (Kode Animasi Anda)
               <div className="relative mb-6">
                  <div className="w-24 h-24 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center animate-pulse">
                     <div className="w-16 h-16 bg-blue-100 dark:bg-blue-800/40 rounded-full flex items-center justify-center">
@@ -61,7 +59,6 @@ export default async function WaitingRoomPage() {
                     </div>
                  </div>
               </div>
-              // -----------------------------------------------------------
             )}
 
             {/* TEXT STATUS */}
@@ -77,8 +74,9 @@ export default async function WaitingRoomPage() {
               )}
             </p>
 
+            {/* ACTION BUTTONS (Ganti LogoutButton dengan CheckStatusButton) */}
             <div className="w-full flex justify-center border-t border-gray-100 dark:border-gray-800 pt-6">
-              <LogoutButton />
+              <CheckStatusButton /> 
             </div>
           </div>
         </div>
@@ -93,17 +91,13 @@ export default async function WaitingRoomPage() {
             <div className="grid gap-3 md:grid-cols-2">
               {admins.map((admin: any) => {
                 const waNumber = formatPhoneForWA(admin.phone)
-                
-                // --- UPDATE PESAN DINAMIS ---
                 const message = encodeURIComponent(
                   `Halo Admin ${admin.full_name}, saya ${user.full_name} baru mendaftar di ${appName}. Mohon approval akun saya.`
                 )
-                
                 const waLink = waNumber ? `https://wa.me/${waNumber}?text=${message}` : '#'
 
                 return (
                   <div key={admin.id} className="bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200 dark:border-gray-800 flex items-center gap-3 hover:border-blue-300 transition-all shadow-sm">
-                    {/* Avatar */}
                     <div className="shrink-0 w-10 h-10 rounded-full overflow-hidden bg-gray-100 border border-gray-200">
                       {admin.avatar_url ? (
                         <Image src={admin.avatar_url} alt={admin.full_name} width={40} height={40} className="w-full h-full object-cover"/>
@@ -112,13 +106,11 @@ export default async function WaitingRoomPage() {
                       )}
                     </div>
                     
-                    {/* Info */}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{admin.full_name}</p>
                       <p className="text-[10px] text-gray-500 capitalize">{admin.role.replace('_', ' ')}</p>
                     </div>
 
-                    {/* Tombol WA */}
                     {waNumber && (
                       <a 
                         href={waLink} 
