@@ -3,6 +3,7 @@
 // File: src/components/gallery/PhotoCard.tsx
 // - Tanpa nama file di card
 // - Hanya tanggal upload dan uploader (jika admin)
+// - FIX: Longpress tidak trigger saat scroll
 // ============================================================================
 
 'use client'
@@ -26,6 +27,9 @@ interface PhotoCardProps {
   showUserInfo?: boolean
 }
 
+// FIX: Threshold untuk membedakan scroll vs longpress
+const MOVEMENT_THRESHOLD = 10
+
 export default function PhotoCard({
   photo,
   isSelecting,
@@ -41,14 +45,41 @@ export default function PhotoCard({
   const [dimensions, setDimensions] = useState({ width: 1, height: 1 })
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
   const isLongPress = useRef(false)
+  
+  // FIX: Track touch position
+  const touchStart = useRef({ x: 0, y: 0 })
+  const hasMoved = useRef(false)
 
-  const handleTouchStart = () => {
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // FIX: Simpan posisi awal
+    const touch = e.touches[0]
+    touchStart.current = { x: touch.clientX, y: touch.clientY }
+    hasMoved.current = false
     isLongPress.current = false
+    
     longPressTimer.current = setTimeout(() => {
-      isLongPress.current = true
-      onLongPress(photo.id)
-      if (navigator.vibrate) navigator.vibrate(50)
+      // FIX: Hanya trigger jika tidak bergerak
+      if (!hasMoved.current) {
+        isLongPress.current = true
+        onLongPress(photo.id)
+        if (navigator.vibrate) navigator.vibrate(50)
+      }
     }, 500)
+  }
+
+  // FIX: Detect scroll movement
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    const dx = Math.abs(touch.clientX - touchStart.current.x)
+    const dy = Math.abs(touch.clientY - touchStart.current.y)
+    
+    if (dx > MOVEMENT_THRESHOLD || dy > MOVEMENT_THRESHOLD) {
+      hasMoved.current = true
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
+    }
   }
 
   const handleTouchEnd = () => {
@@ -57,6 +88,11 @@ export default function PhotoCard({
 
   const handleClick = (e: React.MouseEvent | React.TouchEvent) => {
     if (isLongPress.current) {
+      e.preventDefault()
+      return
+    }
+    // FIX: Jangan click jika sedang scroll
+    if (hasMoved.current) {
       e.preventDefault()
       return
     }
@@ -89,6 +125,25 @@ export default function PhotoCard({
     setIsLoading(false)
   }
 
+  // Mouse handlers untuk desktop
+  const handleMouseDown = () => {
+    touchStart.current = { x: 0, y: 0 }
+    hasMoved.current = false
+    isLongPress.current = false
+    longPressTimer.current = setTimeout(() => {
+      isLongPress.current = true
+      onLongPress(photo.id)
+    }, 500)
+  }
+
+  const handleMouseUp = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+  }
+
+  const handleMouseLeave = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+  }
+
   useEffect(() => {
     return () => {
       if (longPressTimer.current) clearTimeout(longPressTimer.current)
@@ -99,17 +154,19 @@ export default function PhotoCard({
     <div
       onClick={handleClick}
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
-      onMouseDown={handleTouchStart}
-      onMouseUp={handleTouchEnd}
-      onMouseLeave={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
       className={cn(
         'group relative rounded-lg overflow-hidden cursor-pointer',
         'transition-all duration-200',
         'hover:shadow-lg active:scale-[0.98]',
         isSelected && 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900 scale-[0.97]',
-        'break-inside-avoid mb-1.5 md:mb-2'
+        'break-inside-avoid mb-1.5 md:mb-2',
+        'select-none' // FIX: Prevent text selection during longpress
       )}
     >
       <div 
@@ -129,6 +186,7 @@ export default function PhotoCard({
             isLoading && 'blur-sm scale-105'
           )}
           onLoad={handleImageLoad}
+          draggable={false}
           priority={false}
         />
 
