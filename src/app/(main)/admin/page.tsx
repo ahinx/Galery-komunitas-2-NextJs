@@ -15,7 +15,10 @@ import {
 } from 'lucide-react'
 import ApprovalCard from '@/components/admin/ApprovalCard'
 
+
 export const dynamic = 'force-dynamic'
+
+
 
 export default async function AdminDashboardPage() {
   const user = await getCurrentUser()
@@ -26,6 +29,8 @@ export default async function AdminDashboardPage() {
 
   const pendingUsersRes = await getPendingUsers()
   const pendingUsers = pendingUsersRes.success ? pendingUsersRes.data || [] : []
+
+
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -41,7 +46,7 @@ export default async function AdminDashboardPage() {
             Admin Dashboard
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            Pusat kontrol & approval anggota komunitas.
+            Pusat kontrol & approval anggota.
           </p>
         </div>
 

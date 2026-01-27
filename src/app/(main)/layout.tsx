@@ -4,33 +4,44 @@
 // ============================================================================
 
 import { getCurrentUser } from '@/actions/auth'
+import { getAppSettings } from '@/actions/settings' // Import fungsi ini
+import Navbar from '@/components/layout/Navbar'
+import BottomNav from '@/components/layout/BottomNav'
 import { redirect } from 'next/navigation'
-import Navbar from '@/components/layout/Navbar'       // Import Baru
-import BottomNav from '@/components/layout/BottomNav' // Import Baru
 
 export default async function MainLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const user = await getCurrentUser()
+  // 1. Ambil Data User & Settings secara paralel
+  const [user, settings] = await Promise.all([
+    getCurrentUser(),
+    getAppSettings()
+  ])
 
-  // Security Check
-  if (!user) redirect('/login')
-  if (!user.is_approved) redirect('/waiting-room')
+  if (!user) {
+    redirect('/login')
+  }
+
+  // Fallback settings jika null (misal database kosong)
+  const appSettings = settings || {
+    app_name: 'Galeri PTN',
+    logo_url: null
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 md:pb-0">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-20 md:pb-0">
       
-      {/* 1. Header (Desktop & Mobile Top) */}
-      <Navbar user={user} />
+      {/* HEADER: Kirim user & settings ke Navbar */}
+      <Navbar user={user} settings={appSettings} />
 
-      {/* 2. Page Content */}
+      {/* PAGE CONTENT */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {children}
       </main>
 
-      {/* 3. Bottom Navigation (Mobile Only) */}
+      {/* BOTTOM NAV */}
       <BottomNav user={user} />
 
     </div>

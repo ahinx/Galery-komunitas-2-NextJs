@@ -1,17 +1,17 @@
 // ============================================================================
-// ROOT LAYOUT (Updated for SEO & Social Share)
+// ROOT LAYOUT (Dynamic Metadata)
 // File: src/app/layout.tsx
 // ============================================================================
 
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-// import { Toaster } from 'sonner'
+import { Toaster } from 'sonner'
+import { getAppSettings } from '@/actions/settings' // Import fungsi tadi
 
-// Inisialisasi Font
 const inter = Inter({ subsets: ['latin'] })
 
-// 1. KONFIGURASI VIEWPORT (Terpisah di Next.js 14+)
+// 1. VIEWPORT (Tetap Statis)
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -22,49 +22,59 @@ export const viewport: Viewport = {
   ],
 }
 
-// 2. KONFIGURASI METADATA (SEO & Social Share)
-export const metadata: Metadata = {
-  // GANTI INI dengan domain Vercel Anda (tanpa akhiran /)
-  metadataBase: new URL('https://galeri-komunitas-anda.vercel.app'), 
+// 2. GENERATE METADATA (Dinamis dari DB)
+export async function generateMetadata(): Promise<Metadata> {
+  // Ambil data dari DB
+  const settings = await getAppSettings()
 
-  title: {
-    default: 'Galeri Komunitas',
-    template: '%s | Galeri Komunitas',
-  },
-  description: 'Platform berbagi foto dan kenangan komunitas. Upload, simpan, dan bagikan momen terbaik Anda.',
-  
-  // Konfigurasi Icon (Favicon)
-  icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon.ico',
-    apple: '/apple-touch-icon.png', // Opsional: jika Anda punya icon khusus Apple
-  },
+  // Fallback jika DB kosong/error
+  const appName = settings?.app_name || 'Galeri Komunitas'
+  const appDesc = settings?.app_description || 'Platform berbagi momen warga.'
+  const iconUrl = settings?.icon_url || '/favicon.ico'
+  const ogImage = settings?.og_image_url || '/opengraph-image.png' // Default file lokal
 
-  // Konfigurasi Open Graph (Tampilan saat dibagi di WA/FB)
-  openGraph: {
-    title: 'Galeri Komunitas',
-    description: 'Lihat koleksi foto dan momen spesial komunitas kami.',
-    url: '/',
-    siteName: 'Galeri Komunitas',
-    locale: 'id_ID',
-    type: 'website',
-    // Gambar Preview (Next.js akan otomatis cari file opengraph-image di folder app)
-  },
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
-  // Konfigurasi Twitter Card
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Galeri Komunitas',
-    description: 'Platform berbagi foto dan kenangan komunitas.',
-  },
+  return {
+    metadataBase: new URL(baseUrl),
+    title: {
+      default: appName,
+      template: `%s | ${appName}`,
+    },
+    description: appDesc,
+    
+    // Icon Tab Browser (Favicon Dinamis)
+    icons: {
+      icon: iconUrl,
+      shortcut: iconUrl,
+      apple: iconUrl, 
+    },
 
-  // Konfigurasi PWA (Opsional, agar bisa diinstall)
-  manifest: '/manifest.json',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'default',
-    title: 'Galeri Komunitas',
-  },
+    // Open Graph (Tampilan Share WA/FB)
+    openGraph: {
+      title: appName,
+      description: appDesc,
+      siteName: appName,
+      locale: 'id_ID',
+      type: 'website',
+      images: [
+        {
+          url: ogImage,
+          width: 1200,
+          height: 630,
+          alt: appName,
+        },
+      ],
+    },
+
+    // Twitter Card
+    twitter: {
+      card: 'summary_large_image',
+      title: appName,
+      description: appDesc,
+      images: [ogImage],
+    },
+  }
 }
 
 export default function RootLayout({
@@ -75,7 +85,6 @@ export default function RootLayout({
   return (
     <html lang="id" suppressHydrationWarning>
       <body className={inter.className}>
-        {/* Script untuk mencegah Flash of Unstyled Content (FOUC) pada Dark Mode */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -89,12 +98,8 @@ export default function RootLayout({
             `,
           }}
         />
-        
-        {/* Main Content */}
         {children}
-        
-        {/* Toast Notification */}
-        {/* <Toaster position="top-center" richColors /> */}
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   )
