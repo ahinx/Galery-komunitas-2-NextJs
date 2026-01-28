@@ -1,56 +1,94 @@
 // ============================================================================
-// DROPZONE COMPONENT (Mobile Optimized Action Bar)
+// DROPZONE COMPONENT WITH THUMBNAIL GENERATION
 // File: src/components/upload/DropZone.tsx
-// Deskripsi: Drag & Drop dengan tombol upload yang responsif (kecil di mobile)
+// Fitur: Upload original + thumbnail dalam satu flow
 // ============================================================================
 
 'use client'
 
 import { useCallback, useState, useEffect } from 'react'
 import { useDropzone, FileRejection } from 'react-dropzone'
-import { Upload, X, CheckCircle2, AlertCircle, Loader2, Play, Trash2 } from 'lucide-react'
+import { Upload, X, CheckCircle2, AlertCircle, Loader2, Play, ImageIcon } from 'lucide-react'
 import Image from 'next/image'
 import { uploadPhoto } from '@/actions/photos'
+import { extractExifData } from '@/lib/exif-extractor'
 
 // Import Utility
 import { 
-  compressImage, 
+  processImageWithThumbnail,
   getImagePreviewUrl, 
   revokePreviewUrl,
-  isValidImage 
+  isValidImage,
+  type ProcessedImage
 } from '@/lib/image-compression'
 
 // --- TYPE DEFINITIONS ---
 interface UploadFile extends File {
   preview: string
   id: string
-  status: 'pending' | 'compressing' | 'uploading' | 'success' | 'error'
+  status: 'pending' | 'processing' | 'uploading' | 'success' | 'error'
+  statusText?: string
   errorMessage?: string
+  processedData?: ProcessedImage
 }
 
 export default function DropZone() {
   const [files, setFiles] = useState<UploadFile[]>([])
   const [isUploadingGlobal, setIsUploadingGlobal] = useState(false)
 
-  // LOGIC: PROSES UPLOAD
-  const processUpload = async (fileId: string, fileObj: File) => {
-    setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'compressing' } : f))
+  // ============================================================================
+  // PROCESS & UPLOAD SINGLE FILE
+  // ============================================================================
+  
+  const processAndUpload = async (fileId: string, fileObj: File) => {
+    // Step 1: Processing (compress + generate thumbnail)
+    setFiles(prev => prev.map(f => f.id === fileId ? { 
+      ...f, 
+      status: 'processing',
+      statusText: 'Memproses gambar...'
+    } : f))
     
     try {
-      const compressedFile = await compressImage(fileObj)
-      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'uploading' } : f))
+      // Extract EXIF data first (before compression might strip it)
+      const exifData = await extractExifData(fileObj)
+      
+      // Process image: compress original + generate thumbnail
+      setFiles(prev => prev.map(f => f.id === fileId ? { 
+        ...f, 
+        statusText: 'Membuat thumbnail...'
+      } : f))
+      
+      const processed = await processImageWithThumbnail(fileObj)
+      
+      console.log(`📊 [PROCESSED] Original: ${(processed.originalSize/1024).toFixed(0)}KB, Thumb: ${(processed.thumbnailSize/1024).toFixed(0)}KB`)
 
+      // Step 2: Uploading
+      setFiles(prev => prev.map(f => f.id === fileId ? { 
+        ...f, 
+        status: 'uploading',
+        statusText: 'Mengupload...',
+        processedData: processed
+      } : f))
+
+      // Prepare FormData with both files
       const formData = new FormData()
-      formData.append('file', compressedFile) 
+      formData.append('file', processed.original)
+      formData.append('thumbnail', processed.thumbnail)
+      formData.append('exifData', JSON.stringify(exifData))
 
       const result = await uploadPhoto(formData)
 
       if (result.success) {
-        setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: 'success' } : f))
+        setFiles(prev => prev.map(f => f.id === fileId ? { 
+          ...f, 
+          status: 'success',
+          statusText: 'Selesai!'
+        } : f))
       } else {
         throw new Error(result.message)
       }
     } catch (error: any) {
+      console.error(`❌ [UPLOAD ERROR] ${fileId}:`, error)
       setFiles(prev => prev.map(f => f.id === fileId ? { 
         ...f, 
         status: 'error', 
@@ -59,17 +97,28 @@ export default function DropZone() {
     }
   }
 
-  // LOGIC: START UPLOAD
+  // ============================================================================
+  // START UPLOAD ALL PENDING
+  // ============================================================================
+  
   const handleStartUpload = async () => {
     const pendingFiles = files.filter(f => f.status === 'pending')
     if (pendingFiles.length === 0) return
 
     setIsUploadingGlobal(true)
-    await Promise.all(pendingFiles.map(file => processUpload(file.id, file)))
+    
+    // Process sequentially to avoid overwhelming the server
+    for (const file of pendingFiles) {
+      await processAndUpload(file.id, file)
+    }
+    
     setIsUploadingGlobal(false)
   }
 
-  // ON DROP
+  // ============================================================================
+  // ON DROP FILES
+  // ============================================================================
+  
   const onDrop = useCallback((acceptedFiles: File[], fileRejections: FileRejection[]) => {
     const newFiles = acceptedFiles.map(file => {
       if (!isValidImage(file)) return null
@@ -83,18 +132,26 @@ export default function DropZone() {
     setFiles(prev => [...prev, ...newFiles])
 
     if (fileRejections.length > 0) {
-      alert(`${fileRejections.length} file ditolak.`)
+      alert(`${fileRejections.length} file ditolak (format/ukuran tidak valid).`)
     }
   }, [])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'image/jpeg': [], 'image/png': [], 'image/webp': [], 'image/heic': [] },
+    accept: { 
+      'image/jpeg': [], 
+      'image/png': [], 
+      'image/webp': [], 
+      'image/heic': [] 
+    },
     multiple: true,
     disabled: isUploadingGlobal
   })
 
-  // ACTIONS
+  // ============================================================================
+  // FILE ACTIONS
+  // ============================================================================
+  
   const removeFile = (id: string) => {
     setFiles(prev => {
       const target = prev.find(f => f.id === id)
@@ -111,10 +168,15 @@ export default function DropZone() {
   const pendingCount = files.filter(f => f.status === 'pending').length
   const isAllDone = files.length > 0 && files.every(f => f.status === 'success' || f.status === 'error')
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => files.forEach(file => revokePreviewUrl(file.preview))
   }, [])
 
+  // ============================================================================
+  // RENDER
+  // ============================================================================
+  
   return (
     <div className="w-full max-w-3xl mx-auto space-y-6">
       
@@ -143,28 +205,25 @@ export default function DropZone() {
               {isDragActive ? "Lepaskan file..." : "Pilih Foto Galeri"}
             </p>
             <p className="text-xs sm:text-sm text-gray-500 mt-1 max-w-sm mx-auto">
-              Tap atau Tarik foto ke sini.
+              Tap atau Tarik foto ke sini. Thumbnail akan dibuat otomatis.
             </p>
           </div>
         </div>
       </div>
 
-      {/* 2. ACTION BAR (OPTIMIZED MOBILE) */}
+      {/* 2. ACTION BAR */}
       {files.length > 0 && !isAllDone && (
         <div className="bg-white dark:bg-gray-800 p-3 sm:p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm animate-in fade-in slide-in-from-top-2">
-          
-          {/* Layout: Stack di Mobile, Row di Desktop */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
             
             {/* Info Count */}
             <div className="text-xs sm:text-sm text-center sm:text-left w-full sm:w-auto">
               <span className="font-bold text-gray-900 dark:text-white">{pendingCount}</span> foto siap upload
+              <span className="text-gray-400 ml-1">(+ thumbnail)</span>
             </div>
             
             {/* Buttons Group */}
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              
-              {/* Tombol Batal */}
               <button 
                 onClick={clearAll}
                 disabled={isUploadingGlobal}
@@ -173,18 +232,10 @@ export default function DropZone() {
                 Batal
               </button>
 
-              {/* Tombol Upload (Kecil di Mobile) */}
               <button 
                 onClick={handleStartUpload}
                 disabled={isUploadingGlobal || pendingCount === 0}
-                className={`
-                  flex-1 sm:flex-none flex items-center justify-center gap-2 
-                  px-4 py-2.5 sm:px-6 sm:py-2 
-                  bg-blue-600 hover:bg-blue-700 text-white 
-                  text-xs sm:text-sm font-bold rounded-lg 
-                  shadow-lg shadow-blue-500/30 transition-all active:scale-95 
-                  disabled:opacity-70 disabled:cursor-not-allowed
-                `}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 sm:px-6 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold rounded-lg shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isUploadingGlobal ? (
                   <>
@@ -230,17 +281,22 @@ export default function DropZone() {
                 `}
               >
                 
-                {/* Thumbnail (Kecil di Mobile) */}
+                {/* Thumbnail Preview */}
                 <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-lg overflow-hidden bg-gray-100 relative shrink-0 shadow-inner group">
                    <Image 
                      src={file.preview} 
                      alt="preview" 
                      fill 
-                     className={`object-cover transition-opacity ${file.status === 'uploading' ? 'opacity-50' : 'opacity-100'}`}
+                     className={`object-cover transition-opacity ${file.status === 'uploading' || file.status === 'processing' ? 'opacity-50' : 'opacity-100'}`}
                    />
                    {file.status === 'success' && (
                      <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
                        <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-md" />
+                     </div>
+                   )}
+                   {file.status === 'processing' && (
+                     <div className="absolute inset-0 bg-amber-500/20 flex items-center justify-center">
+                       <ImageIcon className="w-4 h-4 text-amber-600 animate-pulse" />
                      </div>
                    )}
                 </div>
@@ -252,7 +308,7 @@ export default function DropZone() {
                       {file.name}
                     </p>
                     
-                    {file.status !== 'success' && file.status !== 'uploading' && !isUploadingGlobal && (
+                    {file.status === 'pending' && !isUploadingGlobal && (
                       <button onClick={() => removeFile(file.id)} className="text-gray-400 hover:text-red-500 p-1">
                         <X className="w-4 h-4" />
                       </button>
@@ -267,21 +323,28 @@ export default function DropZone() {
                         </span>
                     )}
 
-                    {file.status === 'compressing' && (
+                    {file.status === 'processing' && (
                         <div className="flex items-center gap-2 text-amber-600 text-[10px] sm:text-xs font-medium">
                             <Loader2 className="w-3 h-3 animate-spin" />
-                            <span>Kompresi...</span>
+                            <span>{file.statusText || 'Memproses...'}</span>
                         </div>
                     )}
 
                     {file.status === 'uploading' && (
                         <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[10px] sm:text-xs text-blue-600 font-medium">
-                             <span>Upload...</span>
+                          <div className="flex items-center gap-2 text-[10px] sm:text-xs text-blue-600 font-medium">
+                             <Loader2 className="w-3 h-3 animate-spin" />
+                             <span>{file.statusText || 'Mengupload...'}</span>
                           </div>
                           <div className="h-1 sm:h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
                               <div className="h-full bg-blue-500 animate-pulse w-3/4 rounded-full"></div>
                           </div>
+                          {file.processedData && (
+                            <p className="text-[9px] text-gray-400">
+                              Original: {(file.processedData.originalSize/1024).toFixed(0)}KB • 
+                              Thumb: {(file.processedData.thumbnailSize/1024).toFixed(0)}KB
+                            </p>
+                          )}
                         </div>
                     )}
 

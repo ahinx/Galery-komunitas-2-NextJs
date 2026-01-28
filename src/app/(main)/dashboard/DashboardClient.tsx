@@ -1,24 +1,28 @@
 // ============================================================================
-// DASHBOARD CLIENT COMPONENT (Global Stats)
+// DASHBOARD CLIENT COMPONENT - WITH INFINITE SCROLL
 // File: src/app/(main)/dashboard/DashboardClient.tsx
-// Deskripsi: Menampilkan stats global server-side & grid foto
 // ============================================================================
 
 'use client'
 
-import { useState, useCallback, useTransition, useEffect } from 'react'
+import { useState, useCallback, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import PhotoGrid from '@/components/gallery/PhotoGrid'
 import { 
   Images, 
   TrendingUp,
-  HardDrive
+  HardDrive,
+  Loader2,
+  ChevronUp
 } from 'lucide-react'
 import type { Photo, Profile } from '@/lib/supabase/client'
 import { cn, formatFileSize } from '@/lib/utils'
-import { getPhotos } from '@/actions/photos'
+import { getPhotosPaginated, type PhotoCursor } from '@/actions/photos'
 
-// Definisi tipe Stats
+// ============================================================================
+// TYPES
+// ============================================================================
+
 interface DashboardStats {
   total: number
   thisMonth: number
@@ -27,13 +31,24 @@ interface DashboardStats {
 
 interface DashboardClientProps {
   initialPhotos: Photo[]
+  initialHasMore: boolean
+  initialCursor: PhotoCursor | null
   user: Profile
   searchQuery: string
-  serverStats: DashboardStats // <--- Prop Baru
+  serverStats: DashboardStats
 }
+
+const LOAD_MORE_LIMIT = 20
+const SCROLL_THRESHOLD = 400
+
+// ============================================================================
+// COMPONENT
+// ============================================================================
 
 export default function DashboardClient({
   initialPhotos,
+  initialHasMore,
+  initialCursor,
   user,
   searchQuery,
   serverStats, 
@@ -41,52 +56,133 @@ export default function DashboardClient({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   
+  // Photo state
   const [photos, setPhotos] = useState<Photo[]>(initialPhotos)
+  const [hasMore, setHasMore] = useState(initialHasMore)
+  const [cursor, setCursor] = useState<PhotoCursor | null>(initialCursor)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  
+  // UI state
   const [isScrolled, setIsScrolled] = useState(false)
+  const [showBackToTop, setShowBackToTop] = useState(false)
+  
+  // Refs
+  const loadMoreRef = useRef<HTMLDivElement>(null)
+  const isLoadingRef = useRef(false)
 
-  // Sync photos saat navigasi balik/search
+  // ============================================================================
+  // SYNC STATE
+  // ============================================================================
+  
   useEffect(() => {
     setPhotos(initialPhotos)
-  }, [initialPhotos])
+    setHasMore(initialHasMore)
+    setCursor(initialCursor)
+  }, [initialPhotos, initialHasMore, initialCursor])
 
-  // Scroll detection
+  // ============================================================================
+  // INFINITE SCROLL
+  // ============================================================================
+
+  const loadMorePhotos = useCallback(async () => {
+    if (isLoadingRef.current || !hasMore || !cursor) return
+    
+    isLoadingRef.current = true
+    setIsLoadingMore(true)
+
+    try {
+      const result = await getPhotosPaginated({
+        cursor,
+        limit: LOAD_MORE_LIMIT,
+        searchQuery,
+      })
+
+      if (result.success && result.data) {
+        const { photos: newPhotos, hasMore: moreAvailable, nextCursor } = result.data
+        
+        setPhotos(prev => {
+          const existingIds = new Set(prev.map(p => p.id))
+          const uniqueNew = newPhotos.filter(p => !existingIds.has(p.id))
+          return [...prev, ...uniqueNew]
+        })
+        
+        setHasMore(moreAvailable)
+        setCursor(nextCursor)
+      }
+    } catch (error) {
+      console.error('Failed to load more photos:', error)
+    } finally {
+      setIsLoadingMore(false)
+      isLoadingRef.current = false
+    }
+  }, [cursor, hasMore, searchQuery])
+
+  // ============================================================================
+  // INTERSECTION OBSERVER
+  // ============================================================================
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingRef.current) {
+          loadMorePhotos()
+        }
+      },
+      { rootMargin: `${SCROLL_THRESHOLD}px`, threshold: 0 }
+    )
+
+    const sentinel = loadMoreRef.current
+    if (sentinel) observer.observe(sentinel)
+
+    return () => {
+      if (sentinel) observer.unobserve(sentinel)
+    }
+  }, [loadMorePhotos, hasMore])
+
+  // ============================================================================
+  // SCROLL EFFECTS
+  // ============================================================================
+
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50)
+      const scrollY = window.scrollY
+      setIsScrolled(scrollY > 50)
+      setShowBackToTop(scrollY > 500)
     }
-    window.addEventListener('scroll', handleScroll)
+    
+    window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Handler update: Refresh router agar stats di server dihitung ulang
-  const handlePhotosUpdated = useCallback(async () => {
-    startTransition(async () => {
-      router.refresh() // <--- Ini akan memicu fetch ulang getPhotoStats() di server
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
 
-      // Update grid lokal biar UI responsif
-      try {
-        const res = await getPhotos({
-            searchQuery: searchQuery,
-            limit: 100
-        })
-        if (res.success && res.data) {
-            setPhotos(res.data.photos)
-        }
-      } catch (error) {
-        console.error("Gagal refresh data lokal", error)
-      }
+  // ============================================================================
+  // PHOTO UPDATE HANDLER
+  // ============================================================================
+
+  const handlePhotosUpdated = useCallback(async () => {
+    startTransition(() => {
+      router.refresh()
     })
-  }, [router, searchQuery])
+  }, [router])
+
+  // ============================================================================
+  // RENDER
+  // ============================================================================
 
   return (
     <>
-      {/* Stats Bar - Normal (Menampilkan Data Server Global) */}
+      {/* Stats Bar - Normal */}
       {!isScrolled && (
         <div className="flex justify-center py-3 border-b border-gray-200/50 dark:border-gray-800/50">
           <div className="flex items-center gap-4 md:gap-6 text-xs md:text-sm">
             <div className="flex items-center gap-1.5">
               <Images className="w-3.5 h-3.5 text-blue-500" />
-              <span className="font-semibold text-gray-900 dark:text-white">{serverStats.total}</span>
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {serverStats.total.toLocaleString('id-ID')}
+              </span>
               <span className="text-gray-500">Total Foto</span>
             </div>
 
@@ -94,7 +190,9 @@ export default function DashboardClient({
 
             <div className="flex items-center gap-1.5">
               <TrendingUp className="w-3.5 h-3.5 text-green-500" />
-              <span className="font-semibold text-gray-900 dark:text-white">{serverStats.thisMonth}</span>
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {serverStats.thisMonth.toLocaleString('id-ID')}
+              </span>
               <span className="text-gray-500">Bulan Ini</span>
             </div>
 
@@ -102,7 +200,9 @@ export default function DashboardClient({
 
             <div className="flex items-center gap-1.5" title="Total penggunaan server">
               <HardDrive className="w-3.5 h-3.5 text-purple-500" />
-              <span className="font-semibold text-gray-900 dark:text-white">{formatFileSize(serverStats.totalSize)}</span>
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {formatFileSize(serverStats.totalSize)}
+              </span>
               <span className="text-gray-500 hidden sm:inline">Terpakai</span>
             </div>
           </div>
@@ -120,14 +220,18 @@ export default function DashboardClient({
           )}>
             <div className="flex items-center gap-1">
               <Images className="w-3 h-3 text-blue-500" />
-              <span className="font-semibold text-gray-900 dark:text-white">{serverStats.total}</span>
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {serverStats.total.toLocaleString('id-ID')}
+              </span>
             </div>
 
             <div className="w-px h-2.5 bg-gray-300 dark:bg-gray-600" />
 
             <div className="flex items-center gap-1">
               <HardDrive className="w-3 h-3 text-purple-500" />
-              <span className="font-semibold text-gray-900 dark:text-white">{formatFileSize(serverStats.totalSize)}</span>
+              <span className="font-semibold text-gray-900 dark:text-white">
+                {formatFileSize(serverStats.totalSize)}
+              </span>
             </div>
           </div>
         </div>
@@ -136,11 +240,29 @@ export default function DashboardClient({
       {/* Gallery Section */}
       <div className="flex-1">
         {photos.length > 0 ? (
-          <PhotoGrid
-            photos={photos}
-            currentUser={user} 
-            onPhotosUpdated={handlePhotosUpdated}
-          />
+          <>
+            <PhotoGrid
+              photos={photos}
+              currentUser={user} 
+              onPhotosUpdated={handlePhotosUpdated}
+            />
+            
+            {/* Infinite Scroll Sentinel */}
+            <div ref={loadMoreRef} className="py-8 flex justify-center">
+              {isLoadingMore && (
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span className="text-sm">Memuat foto...</span>
+                </div>
+              )}
+              
+              {!hasMore && photos.length > 0 && (
+                <p className="text-sm text-gray-400">
+                  Semua {photos.length} foto telah dimuat
+                </p>
+              )}
+            </div>
+          </>
         ) : (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-8">
             <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
@@ -159,6 +281,25 @@ export default function DashboardClient({
           </div>
         )}
       </div>
+
+      {/* Back to Top Button */}
+      {showBackToTop && (
+        <button
+          onClick={scrollToTop}
+          className={cn(
+            'fixed bottom-6 right-6 z-50',
+            'w-10 h-10 rounded-full',
+            'bg-blue-600 hover:bg-blue-700 text-white',
+            'shadow-lg hover:shadow-xl',
+            'flex items-center justify-center',
+            'transition-all duration-200',
+            'animate-in fade-in zoom-in-50'
+          )}
+          aria-label="Kembali ke atas"
+        >
+          <ChevronUp className="w-5 h-5" />
+        </button>
+      )}
 
       {/* Loading Overlay */}
       {isPending && (

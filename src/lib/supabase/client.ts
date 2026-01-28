@@ -1,7 +1,7 @@
 // ============================================================================
-// SUPABASE CLIENT CONFIGURATION
+// SUPABASE CLIENT CONFIGURATION - WITH THUMBNAIL SUPPORT
 // File: src/lib/supabase/client.ts
-// Deskripsi: Konfigurasi client Supabase untuk browser & server
+// Update: Tambah thumbnail_url di Photo type
 // ============================================================================
 
 import { createBrowserClient } from '@supabase/ssr'
@@ -9,13 +9,12 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 // ============================================================================
-// ENVIRONMENT VARIABLES (dengan fallback untuk build time)
+// ENVIRONMENT VARIABLES
 // ============================================================================
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
-// Helper untuk validasi saat runtime (bukan build time)
 function validateEnvVars() {
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
         throw new Error(
@@ -26,7 +25,7 @@ function validateEnvVars() {
 }
 
 // ============================================================================
-// BROWSER CLIENT (untuk Client Components)
+// BROWSER CLIENT
 // ============================================================================
 
 export function createClient() {
@@ -38,7 +37,7 @@ export function createClient() {
 }
 
 // ============================================================================
-// SERVER CLIENT (untuk Server Components & Server Actions)
+// SERVER CLIENT
 // ============================================================================
 
 export async function createServerSupabaseClient() {
@@ -56,17 +55,12 @@ export async function createServerSupabaseClient() {
                 set(name: string, value: string, options: CookieOptions) {
                     try {
                         cookieStore.set({ name, value, ...options })
-                    } catch (error) {
-                        // Cookie sudah di-set di middleware atau SSR
-                        // Error ini bisa diabaikan
-                    }
+                    } catch (error) { }
                 },
                 remove(name: string, options: CookieOptions) {
                     try {
                         cookieStore.set({ name, value: '', ...options })
-                    } catch (error) {
-                        // Error ini bisa diabaikan
-                    }
+                    } catch (error) { }
                 },
             },
         }
@@ -74,7 +68,7 @@ export async function createServerSupabaseClient() {
 }
 
 // ============================================================================
-// SERVICE ROLE CLIENT (untuk Admin operations)
+// SERVICE ROLE CLIENT
 // ============================================================================
 
 export async function createServiceRoleClient() {
@@ -98,18 +92,12 @@ export const STORAGE_BUCKETS = {
     PHOTOS: 'photos',
 } as const
 
-/**
- * Helper untuk generate URL publik dari storage path
- */
 export function getPublicUrl(bucket: string, path: string): string {
     const supabase = createClient()
     const { data } = supabase.storage.from(bucket).getPublicUrl(path)
     return data.publicUrl
 }
 
-/**
- * Helper untuk upload file ke storage
- */
 export async function uploadFile(
     bucket: string,
     path: string,
@@ -137,9 +125,6 @@ export async function uploadFile(
     }
 }
 
-/**
- * Helper untuk hapus file dari storage
- */
 export async function deleteFile(
     bucket: string,
     path: string
@@ -157,7 +142,7 @@ export async function deleteFile(
 }
 
 // ============================================================================
-// TYPE DEFINITIONS (untuk TypeScript)
+// TYPE DEFINITIONS
 // ============================================================================
 
 export type UserRole = 'member' | 'admin' | 'super_admin'
@@ -166,6 +151,7 @@ export interface Profile {
     id: string
     full_name: string
     phone_number: string
+    avatar_url?: string
     role: UserRole
     is_verified: boolean
     is_approved: boolean
@@ -179,6 +165,8 @@ export interface Photo {
     user_id: string
     storage_path: string
     display_url: string
+    thumbnail_url: string | null  // ← BARU: URL thumbnail
+    thumbnail_generated: boolean  // ← BARU: Flag status
     file_name: string
     file_size: number
     mime_type: string
@@ -214,7 +202,7 @@ export interface ExifData {
     iso?: number
     aperture?: string
     focal_length?: string
-    [key: string]: any // EXIF data bisa bervariasi
+    [key: string]: any
 }
 
 export interface OtpCode {
