@@ -162,24 +162,32 @@ export async function sendOTP(
             message =
                 `🔐 *Kode Verifikasi ${appName}*
 
-Halo *${userName}*,
-Terima kasih telah mendaftar.
+            Halo *${userName}*,
+            Terima kasih telah mendaftar.
 
-Kode OTP Anda:
-👉 *${otpCode}*
+            Kode OTP Anda:
+            👉 *${otpCode}*
 
-Berlaku 5 menit. Demi keamanan akun, mohon jangan bagikan kode ini kepada siapapun.`
+            Berlaku 1 menit. Demi keamanan akun, mohon jangan bagikan kode ini kepada siapapun.
+            
+            *- Jika Anda tidak melakukan pendaftaran, abaikan pesan ini.*
+            *- ini pesan otomatis, mohon jangan balas!*`
+
+
         } else {
             message =
                 `🔐 *Reset Password ${appName}*
 
-Halo *${userName}*,
-Kami menerima permintaan atur ulang kata sandi untuk akun Anda.
+            Halo *${userName}*,
+            Kami menerima permintaan atur ulang kata sandi untuk akun Anda.
 
-Kode OTP:
-👉 *${otpCode}*
+            Kode OTP:
+            👉 *${otpCode}*
 
-Berlaku 5 menit. Abaikan pesan ini jika Anda tidak memintanya.`
+            Berlaku 1 menit. Abaikan pesan ini jika Anda tidak memintanya.
+            
+            *- Jika Anda tidak meminta reset password, abaikan pesan ini.*
+            *- ini pesan otomatis, mohon jangan balas!.*`
         }
 
         // Kirim WA

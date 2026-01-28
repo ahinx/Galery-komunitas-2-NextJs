@@ -54,7 +54,7 @@ export default async function UploadPage() {
         {/* Footer Tips */}
         <div className="mt-6 text-center">
           <p className="text-xs text-gray-400 dark:text-gray-500">
-            Pastikan foto yang diupload tidak mengandung unsur SARA dan pornografi.
+            Pastikan foto yang diupload berupa kegiatan selama khidmah.
           </p>
         </div>
 
