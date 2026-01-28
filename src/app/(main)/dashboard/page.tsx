@@ -1,11 +1,10 @@
 // ============================================================================
-// DASHBOARD PAGE (SERVER COMPONENT)
+// DASHBOARD PAGE (SERVER COMPONENT) - OPTIMIZED
 // File: src/app/(main)/dashboard/page.tsx
-// Deskripsi: Fetch data foto & stats global
 // ============================================================================
 
 import { getCurrentUser } from '@/actions/auth'
-import { getPhotos, getPhotoStats } from '@/actions/photos' // Import getPhotoStats
+import { getPhotosPaginated, getPhotoStats } from '@/actions/photos'
 import DashboardClient from './DashboardClient'
 
 export const dynamic = 'force-dynamic'
@@ -14,6 +13,8 @@ interface DashboardProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
+const INITIAL_LOAD_LIMIT = 20
+
 export default async function DashboardPage({ searchParams }: DashboardProps) {
   const user = await getCurrentUser()
   if (!user) return null
@@ -21,30 +22,31 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const params = await searchParams
   const searchQuery = typeof params.q === 'string' ? params.q : ''
 
-  // 1. Fetch Foto (Shared Gallery)
-  const photosResult = await getPhotos({
-    searchQuery: searchQuery,
-    limit: 100,
-  })
+  // Parallel fetch
+  const [photosResult, statsResult] = await Promise.all([
+    getPhotosPaginated({
+      limit: INITIAL_LOAD_LIMIT,
+      searchQuery: searchQuery,
+    }),
+    getPhotoStats()
+  ])
 
-  // 2. Fetch Global Stats (Server Side Calculation)
-  const statsResult = await getPhotoStats()
-
-  const photos = photosResult.success ? photosResult.data?.photos || [] : []
+  const photosData = photosResult.success && photosResult.data 
+    ? photosResult.data 
+    : { photos: [], hasMore: false, nextCursor: null }
   
-  // Default values jika stats gagal load
-  const stats = statsResult.success && statsResult.data ? statsResult.data : {
-    total: 0,
-    thisMonth: 0,
-    totalSize: 0
-  }
+  const stats = statsResult.success && statsResult.data 
+    ? statsResult.data 
+    : { total: 0, thisMonth: 0, totalSize: 0 }
 
   return (
     <DashboardClient 
-      initialPhotos={photos}
+      initialPhotos={photosData.photos}
+      initialHasMore={photosData.hasMore}
+      initialCursor={photosData.nextCursor}
       user={user}
       searchQuery={searchQuery}
-      serverStats={stats} // <--- Kirim Stats ke Client
+      serverStats={stats}
     />
   )
 }

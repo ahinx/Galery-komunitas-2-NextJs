@@ -1,8 +1,7 @@
 // ============================================================================
-// PHOTO LIGHTBOX COMPONENT
+// PHOTO LIGHTBOX - LOADS ORIGINAL IMAGE
 // File: src/components/gallery/PhotoLightbox.tsx
-// Deskripsi: Fullscreen preview dengan swipe & high z-index
-// FIX: + Zoom support (pinch/double-tap) + Back button Android
+// Fitur: Load gambar original (bukan thumbnail) untuk preview full-res
 // ============================================================================
 
 'use client'
@@ -19,7 +18,8 @@ import {
   Share2,
   ZoomIn,
   ZoomOut,
-  RotateCcw
+  RotateCcw,
+  Loader2
 } from 'lucide-react'
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch'
 import type { Photo } from '@/lib/supabase/client'
@@ -58,24 +58,28 @@ export default function PhotoLightbox({
   const touchEndX = useRef(0)
   const touchStartY = useRef(0)
 
-  // ==================== FIX: Back Button Android ====================
+  // ============================================================================
+  // ALWAYS USE ORIGINAL IMAGE (display_url) IN LIGHTBOX
+  // Thumbnail hanya untuk grid, preview selalu pakai original
+  // ============================================================================
+  
+  const imageSrc = photo.display_url
+
+  // ============================================================================
+  // BACK BUTTON ANDROID
+  // ============================================================================
+  
   useEffect(() => {
-    // Push state saat lightbox dibuka
     window.history.pushState({ lightbox: true, photoId: photo.id }, '')
 
     const handlePopState = () => {
-      // Saat user tekan back, tutup lightbox
       onClose()
     }
 
     window.addEventListener('popstate', handlePopState)
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState)
-    }
+    return () => window.removeEventListener('popstate', handlePopState)
   }, [onClose, photo.id])
 
-  // FIX: Close yang konsisten dengan history
   const handleClose = useCallback(() => {
     window.history.back()
   }, [])
@@ -87,7 +91,7 @@ export default function PhotoLightbox({
     if (e.key === 'ArrowRight' && !isZoomed) onNext()
   }, [handleClose, onPrev, onNext, isZoomed])
 
-  // Touch handlers untuk swipe (disable saat zoom)
+  // Touch handlers untuk swipe
   const handleTouchStart = (e: React.TouchEvent) => {
     if (isZoomed) return
     touchStartX.current = e.touches[0].clientX
@@ -108,7 +112,6 @@ export default function PhotoLightbox({
     }
   }
 
-  // FIX: Track zoom state
   const handleZoomChange = useCallback((ref: any) => {
     if (ref?.state?.scale !== undefined) {
       setIsZoomed(ref.state.scale > 1.05)
@@ -148,9 +151,7 @@ export default function PhotoLightbox({
   }
 
   return (
-    <div 
-      className="fixed inset-0 z-[100] bg-black flex flex-col"
-    >
+    <div className="fixed inset-0 z-[100] bg-black flex flex-col">
       {/* Top Bar */}
       <div className="absolute top-0 left-0 right-0 z-50 bg-gradient-to-b from-black/70 to-transparent">
         <div className="flex items-center justify-between p-3 pt-safe">
@@ -207,7 +208,7 @@ export default function PhotoLightbox({
           </button>
         )}
 
-        {/* ==================== FIX: Zoomable Image ==================== */}
+        {/* Zoomable Image */}
         <TransformWrapper
           initialScale={1}
           minScale={1}
@@ -220,7 +221,7 @@ export default function PhotoLightbox({
         >
           {({ zoomIn, zoomOut, resetTransform }) => (
             <>
-              {/* Zoom Controls - hanya muncul saat zoomed di mobile */}
+              {/* Zoom Controls */}
               {isZoomed && (
                 <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-full px-3 py-2 md:hidden">
                   <button 
@@ -256,14 +257,20 @@ export default function PhotoLightbox({
                 }}
               >
                 <div className="relative w-full h-full flex items-center justify-center p-2">
+                  {/* Loading Indicator */}
                   {!imageLoaded && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-8 h-8 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                      <Loader2 className="w-8 h-8 text-white animate-spin" />
+                      <p className="text-white/60 text-sm">Memuat gambar original...</p>
                     </div>
                   )}
                   
+                  {/* 
+                    ORIGINAL IMAGE (display_url)
+                    Selalu load gambar full-res di lightbox
+                  */}
                   <Image
-                    src={photo.display_url}
+                    src={imageSrc}
                     alt={photo.file_name || 'Photo'}
                     fill
                     className={cn(
@@ -291,7 +298,7 @@ export default function PhotoLightbox({
           </button>
         )}
 
-        {/* Zoom hint - mobile only, saat tidak zoom */}
+        {/* Zoom hint */}
         {!isZoomed && (
           <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1.5 md:hidden pointer-events-none">
             <ZoomIn className="w-3.5 h-3.5 text-white/70" />
@@ -299,7 +306,7 @@ export default function PhotoLightbox({
           </div>
         )}
 
-        {/* Dots indicator (mobile) */}
+        {/* Dots indicator */}
         {photos.length > 1 && !isZoomed && (
           <div className="absolute bottom-32 left-1/2 -translate-x-1/2 flex gap-1 md:hidden">
             {photos.slice(Math.max(0, currentIndex - 2), Math.min(photos.length, currentIndex + 3)).map((p, i) => {
@@ -333,6 +340,9 @@ export default function PhotoLightbox({
               </p>
               <p className="text-white/50 text-xs">
                 {currentIndex + 1} / {photos.length}
+                {photo.thumbnail_url && (
+                  <span className="ml-2 text-green-400">• HD</span>
+                )}
               </p>
             </div>
             <button
@@ -355,8 +365,7 @@ export default function PhotoLightbox({
                 <p>📷 {photo.exif_data.camera_model}</p>
               )}
               <p className="text-white/40 text-xs pt-1">
-                💡 Cubit untuk zoom
-                {/* ketuk 2x untuk zoom cepat */}
+                💡 Cubit untuk zoom • Gambar original (full resolution)
               </p>
             </div>
           )}

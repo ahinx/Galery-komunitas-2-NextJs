@@ -1,9 +1,7 @@
 // ============================================================================
-// PHOTO CARD COMPONENT (Clean - No Filename)
+// PHOTO CARD COMPONENT - WITH THUMBNAIL SUPPORT
 // File: src/components/gallery/PhotoCard.tsx
-// - Tanpa nama file di card
-// - Hanya tanggal upload dan uploader (jika admin)
-// - FIX: Longpress tidak trigger saat scroll
+// Fitur: Tampilkan thumbnail di grid, load original saat preview
 // ============================================================================
 
 'use client'
@@ -27,7 +25,6 @@ interface PhotoCardProps {
   showUserInfo?: boolean
 }
 
-// FIX: Threshold untuk membedakan scroll vs longpress
 const MOVEMENT_THRESHOLD = 10
 
 export default function PhotoCard({
@@ -43,22 +40,33 @@ export default function PhotoCard({
 }: PhotoCardProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [dimensions, setDimensions] = useState({ width: 1, height: 1 })
+  const [imageError, setImageError] = useState(false)
+  
   const longPressTimer = useRef<NodeJS.Timeout | null>(null)
   const isLongPress = useRef(false)
-  
-  // FIX: Track touch position
   const touchStart = useRef({ x: 0, y: 0 })
   const hasMoved = useRef(false)
 
+  // ============================================================================
+  // DETERMINE IMAGE SOURCE
+  // Prioritas: thumbnail_url > display_url (fallback)
+  // ============================================================================
+  
+  const imageSrc = imageError 
+    ? photo.display_url  // Fallback ke original jika thumbnail error
+    : (photo.thumbnail_url || photo.display_url)
+
+  // ============================================================================
+  // TOUCH HANDLERS
+  // ============================================================================
+
   const handleTouchStart = (e: React.TouchEvent) => {
-    // FIX: Simpan posisi awal
     const touch = e.touches[0]
     touchStart.current = { x: touch.clientX, y: touch.clientY }
     hasMoved.current = false
     isLongPress.current = false
     
     longPressTimer.current = setTimeout(() => {
-      // FIX: Hanya trigger jika tidak bergerak
       if (!hasMoved.current) {
         isLongPress.current = true
         onLongPress(photo.id)
@@ -67,7 +75,6 @@ export default function PhotoCard({
     }, 500)
   }
 
-  // FIX: Detect scroll movement
   const handleTouchMove = (e: React.TouchEvent) => {
     const touch = e.touches[0]
     const dx = Math.abs(touch.clientX - touchStart.current.x)
@@ -87,12 +94,7 @@ export default function PhotoCard({
   }
 
   const handleClick = (e: React.MouseEvent | React.TouchEvent) => {
-    if (isLongPress.current) {
-      e.preventDefault()
-      return
-    }
-    // FIX: Jangan click jika sedang scroll
-    if (hasMoved.current) {
+    if (isLongPress.current || hasMoved.current) {
       e.preventDefault()
       return
     }
@@ -125,6 +127,16 @@ export default function PhotoCard({
     setIsLoading(false)
   }
 
+  const handleImageError = () => {
+    // Jika thumbnail gagal, fallback ke original
+    if (photo.thumbnail_url && !imageError) {
+      console.warn(`⚠️ Thumbnail failed, falling back to original: ${photo.id}`)
+      setImageError(true)
+    } else {
+      setIsLoading(false)
+    }
+  }
+
   // Mouse handlers untuk desktop
   const handleMouseDown = () => {
     touchStart.current = { x: 0, y: 0 }
@@ -150,6 +162,12 @@ export default function PhotoCard({
     }
   }, [])
 
+  // Reset error state when photo changes
+  useEffect(() => {
+    setImageError(false)
+    setIsLoading(true)
+  }, [photo.id])
+
   return (
     <div
       onClick={handleClick}
@@ -166,7 +184,7 @@ export default function PhotoCard({
         'hover:shadow-lg active:scale-[0.98]',
         isSelected && 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900 scale-[0.97]',
         'break-inside-avoid mb-1.5 md:mb-2',
-        'select-none' // FIX: Prevent text selection during longpress
+        'select-none'
       )}
     >
       <div 
@@ -176,8 +194,13 @@ export default function PhotoCard({
           minHeight: isLoading ? '100px' : 'auto'
         }}
       >
+        {/* 
+          THUMBNAIL IMAGE
+          - Di grid: load thumbnail (kecil, ~30KB)
+          - Saat preview: PhotoLightbox akan load original
+        */}
         <Image
-          src={photo.display_url}
+          src={imageSrc}
           alt={photo.file_name || 'Photo'}
           fill
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
@@ -186,19 +209,22 @@ export default function PhotoCard({
             isLoading && 'blur-sm scale-105'
           )}
           onLoad={handleImageLoad}
+          onError={handleImageError}
           draggable={false}
           priority={false}
         />
 
+        {/* Loading Skeleton */}
         {isLoading && (
           <div className="absolute inset-0 bg-gray-200 dark:bg-gray-700 animate-pulse" />
         )}
 
+        {/* Selected Overlay */}
         {isSelected && (
           <div className="absolute inset-0 bg-blue-500/30" />
         )}
 
-        {/* Gradient - visible on mobile, hover on desktop */}
+        {/* Gradient Overlay */}
         <div className={cn(
           'absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30',
           'opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity'
@@ -252,7 +278,7 @@ export default function PhotoCard({
           </div>
         )}
 
-        {/* Bottom Info - Hanya tanggal dan uploader, tanpa nama file */}
+        {/* Bottom Info */}
         <div className={cn(
           'absolute bottom-0 left-0 right-0 p-1.5 z-10',
           'opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity'
@@ -264,6 +290,13 @@ export default function PhotoCard({
             )}
           </p>
         </div>
+
+        {/* Thumbnail indicator (dev mode only) */}
+        {process.env.NODE_ENV === 'development' && photo.thumbnail_url && !imageError && (
+          <div className="absolute bottom-1 right-1 bg-green-500/80 text-white text-[8px] px-1 rounded">
+            thumb
+          </div>
+        )}
       </div>
     </div>
   )
